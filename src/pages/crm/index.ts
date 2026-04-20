@@ -1,0 +1,12 @@
+export { default as CrmDashboardPage } from './crm-dashboard-page';
+export { default as LeadsPage } from './leads-page';
+export { default as LeadInfoPage } from './lead-info-page';
+export { default as ClaimsPage } from './claims-page';
+export { default as ClaimInfoPage } from './claim-info-page';
+export { default as SupplementInfoPage } from './supplement-info-page';
+export { default as RequestsPage } from './requests-page';
+export { default as CommissionsPage } from './commissions-page';
+export { default as CallCenterPage } from './call-center-page';
+export { default as CarriersPage } from './carriers-page';
+export { default as TerritoriesPage } from './territories-page';
+export { default as RepsPage } from './reps-page';

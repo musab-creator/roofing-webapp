@@ -11,7 +11,11 @@ import {
   KanbanSquareIcon,
   ServerCogIcon,
   UserIcon,
-  SpeechIcon
+  SpeechIcon,
+  ShieldCheckIcon,
+  ClipboardListIcon,
+  DollarSignIcon,
+  PhoneIncomingIcon
 } from 'lucide-react';
 import { title } from 'process';
 export const navLinks = [
@@ -61,10 +65,47 @@ export const navLinks = [
     lastOfGroup: true
   },
   {
+    title: 'CRM',
+    icon: <KanbanSquareIcon size={'20px'} className="text-foreground" />,
+    path: '/crm',
+    group: 3
+  },
+  {
+    title: 'Leads',
+    icon: <SpeechIcon size={'20px'} className="text-foreground" />,
+    path: '/crm/leads',
+    group: 3
+  },
+  {
+    title: 'Claims',
+    icon: <ShieldCheckIcon size={'20px'} className="text-foreground" />,
+    path: '/crm/claims',
+    group: 3
+  },
+  {
+    title: 'Requests',
+    icon: <ClipboardListIcon size={'20px'} className="text-foreground" />,
+    path: '/crm/requests',
+    group: 3
+  },
+  {
+    title: 'Commissions',
+    icon: <DollarSignIcon size={'20px'} className="text-foreground" />,
+    path: '/crm/commissions',
+    group: 3
+  },
+  {
+    title: 'Call Center',
+    icon: <PhoneIncomingIcon size={'20px'} className="text-foreground" />,
+    path: '/crm/call-center',
+    group: 3,
+    lastOfGroup: true
+  },
+  {
     title: 'Settings',
     icon: <SettingsIcon size={'20px'} className="text-foreground" />,
     path: '/settings',
-    group: 3,
+    group: 4,
     lastOfGroup: false
   }
   // {
