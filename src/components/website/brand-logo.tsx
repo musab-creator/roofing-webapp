@@ -1,42 +1,48 @@
 /**
- * Diversity Roofing logo slot.
+ * Diversity Roofing logo (official brand assets, sourced from Drive).
  *
- * TO USE THE REAL LOGO: drop the official logo file at
- *   public/diversity-logo.png   (transparent background, ~512px wide works best)
- * and it will render automatically — no code change needed.
+ * Files in /public:
+ *   diversity-logo.png      — full stacked lockup: house icon + boxed wordmark
+ *                             + "Protecting Homes. Respecting People" tagline
+ *   diversity-logo-nav.png  — wordmark box only, cropped for slim horizontal
+ *                             contexts like the navbar
  *
- * Until that file exists, a built-in wordmark (roofline mark + company name)
- * renders as the fallback.
+ * The artwork is white/light-blue and is intended for dark (navy)
+ * backgrounds. A text wordmark renders as fallback if an image fails.
  */
 import React from 'react';
 import { cn } from '../../lib/utils';
 
 type BrandLogoProps = {
   className?: string;
-  /** 'dark' = for use on navy backgrounds, 'light' = for use on paper backgrounds */
-  tone?: 'dark' | 'light';
+  /** 'nav' = compact wordmark strip; 'full' = complete stacked lockup */
+  variant?: 'nav' | 'full';
 };
 
-export const BrandLogo = ({ className, tone = 'dark' }: BrandLogoProps) => {
+export const BrandLogo = ({ className, variant = 'nav' }: BrandLogoProps) => {
   const [hasImage, setHasImage] = React.useState(true);
 
   if (hasImage) {
-    return (
+    return variant === 'full' ? (
       <img
         src="/diversity-logo.png"
+        alt="Diversity Roofing — Protecting Homes. Respecting People"
+        onError={() => setHasImage(false)}
+        className={cn('h-24 w-auto', className)}
+      />
+    ) : (
+      <img
+        src="/diversity-logo-nav.png"
         alt="Diversity Roofing"
         onError={() => setHasImage(false)}
-        className={cn('h-9 w-auto', className)}
+        className={cn('h-8 w-auto md:h-9', className)}
       />
     );
   }
 
-  const text = tone === 'dark' ? 'text-white' : 'text-dr-ink';
-  const sub = tone === 'dark' ? 'text-dr-mist' : 'text-dr-slate';
-
   return (
     <span className={cn('inline-flex items-center gap-2.5', className)}>
-      {/* Roofline mark */}
+      {/* Roofline mark (fallback) */}
       <svg
         viewBox="0 0 40 40"
         aria-hidden="true"
@@ -52,19 +58,18 @@ export const BrandLogo = ({ className, tone = 'dark' }: BrandLogoProps) => {
         />
         <path
           d="M11 24 v9 h18 v-9"
-          stroke={tone === 'dark' ? 'white' : 'hsl(var(--dr-ink))'}
+          stroke="white"
           strokeWidth="3.5"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
       </svg>
       <span className="flex flex-col leading-none">
-        <span
-          className={cn('font-display text-[15px] font-extrabold tracking-tight', text)}>
+        <span className="font-display text-[15px] font-extrabold tracking-tight text-white">
           Diversity Roofing
         </span>
-        <span className={cn('mt-1 text-[9.5px] font-semibold uppercase tracking-[0.22em]', sub)}>
-          North Florida
+        <span className="mt-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-dr-mist">
+          Protecting Homes. Respecting People
         </span>
       </span>
     </span>

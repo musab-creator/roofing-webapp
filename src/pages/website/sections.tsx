@@ -69,7 +69,7 @@ export const SiteNav = () => {
       )}>
       <div className="mx-auto flex max-w-6xl items-center justify-between px-5">
         <a href="#top" aria-label="Diversity Roofing — home">
-          <BrandLogo tone="dark" />
+          <BrandLogo />
         </a>
         <div className="hidden items-center gap-7 md:flex">
           {links.map((l) => (
@@ -679,8 +679,8 @@ export const ContactCTA = () => (
 /* ---------------------------------------------------------------- */
 export const SiteFooter = () => (
   <footer className="border-t border-white/10 bg-dr-navy">
-    <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-6 px-5 py-10 md:flex-row">
-      <BrandLogo tone="dark" />
+    <div className="mx-auto flex max-w-6xl flex-col items-center gap-8 px-5 py-14">
+      <BrandLogo variant="full" className="h-28 md:h-32" />
       <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-dr-mist">
         <a href="#services" className="transition-colors hover:text-white">
           Services
