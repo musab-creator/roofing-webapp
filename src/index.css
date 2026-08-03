@@ -132,3 +132,47 @@
     font-size: 16px !important;
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Diversity Roofing marketing site — scoped design system (.dr-site) */
+/* Generated with the claude-design skill. Second theme: does not     */
+/* touch the CRM's shadcn tokens above.                               */
+/* ------------------------------------------------------------------ */
+.dr-site {
+  /* Storm navy — base surfaces (dark sections) */
+  --dr-navy: 222 47% 9%;
+  --dr-navy-2: 221 39% 13%;
+  --dr-navy-3: 220 30% 19%;
+  /* Muted text on navy (AA vs --dr-navy) */
+  --dr-mist: 219 27% 74%;
+  /* Warm light surfaces */
+  --dr-paper: 40 40% 98%;
+  --dr-cream: 40 36% 93%;
+  /* Text on light */
+  --dr-ink: 222 47% 11%;
+  --dr-slate: 222 14% 38%;
+  --dr-line: 222 16% 88%;
+  /* Amber accent — one accent, used sparingly */
+  --dr-amber: 38 94% 52%;
+  --dr-amber-deep: 30 95% 44%;
+
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  scroll-behavior: smooth;
+}
+
+.dr-site ::selection {
+  background: hsl(var(--dr-amber) / 0.3);
+}
+
+/* Motion is opt-out: kill it wholesale for reduced-motion users */
+@media (prefers-reduced-motion: reduce) {
+  .dr-site *,
+  .dr-site *::before,
+  .dr-site *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

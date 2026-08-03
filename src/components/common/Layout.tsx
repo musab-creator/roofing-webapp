@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import SideNavbar from './side-navbar';
 import MobileBottomNav from './mobile-bottom-nav';
 import { Toaster } from '../ui/toaster';
@@ -23,6 +24,7 @@ type Props = {
 
 const Layout = ({ children }: Props) => {
   const auth = useAuth();
+  const { pathname } = useLocation();
 
   // Memoize the initial user data structure
   const initialUserData: UserData = useMemo(
@@ -57,6 +59,11 @@ const Layout = ({ children }: Props) => {
   React.useEffect(() => {
     setLoggedInUserData(userData);
   }, [userData]);
+
+  // The public marketing website renders full-bleed without CRM chrome
+  if (pathname.startsWith('/website')) {
+    return <>{children}</>;
+  }
 
   return (
     <>

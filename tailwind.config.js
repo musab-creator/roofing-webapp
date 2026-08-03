@@ -55,7 +55,25 @@ export default {
         card: {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))'
+        },
+        /* Diversity Roofing marketing-site design system (see .dr-site in index.css) */
+        dr: {
+          navy: 'hsl(var(--dr-navy))',
+          'navy-2': 'hsl(var(--dr-navy-2))',
+          'navy-3': 'hsl(var(--dr-navy-3))',
+          mist: 'hsl(var(--dr-mist))',
+          paper: 'hsl(var(--dr-paper))',
+          cream: 'hsl(var(--dr-cream))',
+          ink: 'hsl(var(--dr-ink))',
+          slate: 'hsl(var(--dr-slate))',
+          line: 'hsl(var(--dr-line))',
+          amber: 'hsl(var(--dr-amber))',
+          'amber-deep': 'hsl(var(--dr-amber-deep))'
         }
+      },
+      fontFamily: {
+        display: ['Sora', 'Inter', 'system-ui', 'sans-serif'],
+        body: ['Inter', 'system-ui', 'sans-serif']
       },
       borderRadius: {
         lg: 'var(--radius)',
@@ -70,11 +88,27 @@ export default {
         'accordion-up': {
           from: { height: 'var(--radix-accordion-content-height)' },
           to: { height: 0 }
+        },
+        /* Marketing-site motion (magic-ui / animata style, CSS-only) */
+        'dr-marquee': {
+          from: { transform: 'translateX(0)' },
+          to: { transform: 'translateX(-50%)' }
+        },
+        'dr-shimmer': {
+          from: { transform: 'translateX(-150%) skewX(-12deg)' },
+          to: { transform: 'translateX(250%) skewX(-12deg)' }
+        },
+        'dr-float': {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-10px)' }
         }
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
-        'accordion-up': 'accordion-up 0.2s ease-out'
+        'accordion-up': 'accordion-up 0.2s ease-out',
+        'dr-marquee': 'dr-marquee 45s linear infinite',
+        'dr-shimmer': 'dr-shimmer 2.75s ease-in-out infinite',
+        'dr-float': 'dr-float 7s ease-in-out infinite'
       }
     }
   },
