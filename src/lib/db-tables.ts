@@ -20,5 +20,26 @@ export const TABLES = {
   QUOTE_STATUS: 'quote_status',
 
   // Service related tables
-  SERVICE: 'service'
+  SERVICE: 'service',
+
+  // CRM domain tables introduced in Phase 1 of the roadmap.
+  // See docs/CRM_ROADMAP.md and the 20260420000000 migration.
+  LEAD: 'lead',
+  LEAD_ACTIVITY: 'lead_activity',
+  LEAD_SOURCE: 'lead_source',
+  LEAD_STATUS: 'lead_status',
+  TERRITORY: 'territory',
+  BAD_LEAD_REASON: 'bad_lead_reason',
+  CARRIER: 'carrier',
+  REP_PROFILE: 'rep_profile',
+  REP_TERRITORY: 'rep_territory',
+  CLAIM: 'claim',
+  SUPPLEMENT: 'supplement',
+  SUPPLEMENT_LINE_ITEM: 'supplement_line_item',
+  SUPPLEMENT_TEMPLATE: 'supplement_template',
+  CALL_CENTER_AGENT: 'call_center_agent',
+  CALL_CENTER_LEAD_SUBMISSION: 'call_center_lead_submission',
+  REQUEST: 'request',
+  COMMISSION: 'commission',
+  JOB_PNL_SNAPSHOT: 'job_pnl_snapshot'
 };
