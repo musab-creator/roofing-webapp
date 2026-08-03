@@ -18,7 +18,7 @@ export const navLinks = [
   {
     title: 'Home',
     icon: <HomeIcon size={'20px'} className="text-foreground" />,
-    path: '/',
+    path: '/dashboard',
     group: 1,
     lastOfGroup: true
   },

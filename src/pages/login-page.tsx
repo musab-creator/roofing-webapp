@@ -1,9 +1,9 @@
 import React from 'react';
-import DefaultPageHeader from '../components/ui/page-header';
 import { Button } from '../components/ui/button';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../components/ui/use-toast';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
+import { ArrowLeft, ShieldCheck, Lock } from 'lucide-react';
 
 type Props = {};
 
@@ -24,41 +24,62 @@ export default function LoginPage() {
         description: `${loginWithGoogle.error.message}`
       });
     } else {
-      navigate('/');
+      navigate('/dashboard');
     }
   };
 
   return (
-    <div className="flex flex-col w-full">
-      {/* <DefaultPageHeader title='Customers' subheading='Manage all customers for you company' addItemTextButton='Add login item'/> */}
-      <div className="flex justify-center w-screen-xl mx-auto mt-[100px] sm:mt-[180px]">
-        <div className="text-center">
-          <div className="flex justify-center mb-2">
-            <div className="w-[60px] shadow-md bg-blue-600 rounded-2xl mx-auto mb-4">
-              <img src="/assets/TRA-logo.png" className="shadow-xs p-[2px]" />
+    <div className="relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-slate-950 px-5 py-12 text-slate-100">
+      {/* Graphic backdrop matching the marketing site */}
+      <div className="absolute inset-0 bg-[radial-gradient(900px_500px_at_70%_-10%,#1e40af_0%,transparent_55%),radial-gradient(700px_450px_at_10%_20%,#0c4a6e_0%,transparent_50%),linear-gradient(180deg,#020617,#0b1220)]" />
+      <div className="dr-grid-bg absolute inset-0 opacity-40" />
+      <div className="absolute -left-16 top-24 h-72 w-72 rounded-full bg-blue-500/20 blur-3xl" />
+      <div className="absolute -right-10 bottom-10 h-72 w-72 rounded-full bg-amber-500/15 blur-3xl" />
+
+      <div className="relative w-full max-w-md">
+        <Link
+          to="/"
+          className="mb-6 inline-flex items-center gap-2 text-sm font-medium text-slate-400 transition hover:text-white">
+          <ArrowLeft className="h-4 w-4" /> Back to website
+        </Link>
+
+        <div className="rounded-3xl border border-white/10 bg-white/[0.06] p-8 shadow-2xl backdrop-blur-xl">
+          <div className="flex flex-col items-center text-center">
+            <div className="grid h-16 w-16 place-items-center overflow-hidden rounded-2xl bg-blue-600 shadow-lg shadow-blue-600/30 ring-1 ring-white/20">
+              <img
+                src="/company-logo.png"
+                alt="Diversity Roofing logo"
+                className="h-full w-full object-cover"
+              />
             </div>
-            {/* <div className="flex gap-4 h-[50px]">
-              <div className="w-[50px] h-[50px] bg-blue-600 rounded-2xl">
-                <img src="/assets/TRA-logo.png" className="shadow-xs p-[0px]" />
-              </div>
-              <div className="flex flex-col -space-y-2 my-auto">
-                <p className="text-[8px] text-left font-[400] uppercase">The</p>
-                <p className="text-[18px] font-[900] uppercase tracking-tight">Roofing</p>
-                <p className="text-[8px] text-right font-[400] uppercase">Application</p>
-              </div>
-            </div> */}
+            <p className="mt-5 text-2xl font-extrabold tracking-tight text-white">
+              Diversity <span className="text-amber-400">Roofing</span>
+            </p>
+            <h1 className="mt-4 text-xl font-bold text-white">Client &amp; Team Portal</h1>
+            <p className="mt-2 text-sm text-slate-300">
+              Sign in to manage quotes, invoices and jobs.
+            </p>
+
+            <form onSubmit={handleGoogleSignin} className="mt-7 w-full">
+              <Button
+                variant={'outline'}
+                className="w-full border-white/15 bg-white text-slate-900 hover:bg-slate-100"
+                type="submit">
+                <img src="/assets/google-icon-144.png" alt="Google Icon" className="mr-2 h-4 w-4" />
+                Sign in with Google
+              </Button>
+            </form>
+
+            <p className="mt-5 flex items-center gap-2 text-xs text-slate-400">
+              <Lock className="h-3.5 w-3.5" /> Secured sign-in · Authorized users only
+            </p>
           </div>
-          <p className="font-[600] text-[30px] mb-2">Log in to your account</p>
-          <p className="text-muted-foreground text-[16px] mb-6 font-[400]">
-            Welcome to "The Roofing App" to empower your business. 🚀
-          </p>
-          <form onSubmit={handleGoogleSignin}>
-            <Button variant={'outline'} className="w-full" type="submit">
-              <img src="/assets/google-icon-144.png" alt="Google Icon" className="mr-2 h-4 w-4" />{' '}
-              Sign in with Google
-            </Button>
-          </form>
         </div>
+
+        <p className="mt-6 flex items-center justify-center gap-2 text-xs text-slate-500">
+          <ShieldCheck className="h-4 w-4 text-emerald-400" /> Licensed &amp; Insured Roofing
+          Professionals
+        </p>
       </div>
     </div>
   );

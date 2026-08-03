@@ -33,7 +33,7 @@ function useDebounce<T>(value: T, delay: number): T {
 }
 
 const PAGES = [
-  { label: 'Dashboard', path: '/', icon: LayoutDashboard },
+  { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
   { label: 'Customers', path: '/customers', icon: Users },
   { label: 'Jobs', path: '/jobs', icon: Briefcase },
   { label: 'Quotes', path: '/quotes', icon: FileText },
