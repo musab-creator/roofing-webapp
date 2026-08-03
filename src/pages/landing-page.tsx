@@ -28,9 +28,9 @@ import {
 import Reveal from '../components/landing/reveal';
 import HeroScene from '../components/landing/hero-scene';
 
-const PHONE_DISPLAY = '(555) 123-4567';
-const PHONE_HREF = 'tel:+15551234567';
-const EMAIL = 'info@diversity-roofing.com';
+const PHONE_DISPLAY = '(904) 979-0556';
+const PHONE_HREF = 'tel:+19049790556';
+const EMAIL = 'Jacksonville@diversity-roofing.com';
 
 const services = [
   {
@@ -173,7 +173,7 @@ const faqs = [
   },
   {
     q: 'What areas do you serve?',
-    a: 'We proudly serve homeowners and businesses throughout the local metro area and surrounding communities. Call us to confirm coverage for your address.'
+    a: 'We proudly serve homeowners and businesses throughout Jacksonville, Florida and the surrounding communities. Call us to confirm coverage for your address.'
   }
 ];
 
@@ -719,7 +719,7 @@ export default function LandingPage() {
                 </div>
                 <div>
                   <p className="text-xs uppercase tracking-wide text-slate-400">Service area</p>
-                  <p className="text-lg font-bold">Local metro &amp; surrounding areas</p>
+                  <p className="text-lg font-bold">Jacksonville, FL &amp; surrounding areas</p>
                 </div>
               </div>
             </div>
@@ -758,7 +758,7 @@ export default function LandingPage() {
                       <input
                         required
                         type="tel"
-                        placeholder="(555) 123-4567"
+                        placeholder="(904) 555-0123"
                         className="dr-input"
                       />
                     </Field>
@@ -943,7 +943,7 @@ export default function LandingPage() {
                   </a>
                 </li>
                 <li className="flex items-center gap-2 text-slate-400">
-                  <MapPin className="h-4 w-4 text-amber-400" /> Local metro area
+                  <MapPin className="h-4 w-4 text-amber-400" /> Jacksonville, FL
                 </li>
                 <li className="pt-2">
                   <Link
