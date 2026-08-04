@@ -34,6 +34,8 @@ import {
 } from './pages';
 import CustomerTypesPage from './pages/customer-types-page';
 import ProfilePage from './pages/profile-page';
+import LandingPage from './pages/landing-page';
+import RevenueDashboardPage from './pages/revenue-dashboard-page';
 import { Layout, ProtectedRoute } from './components';
 import { AuthProvider } from './hooks/useAuth';
 import InvoiceInfoPage from './pages/invoice-info';
@@ -53,12 +55,21 @@ root.render(
         <AuthProvider>
           <Layout>
             <Routes>
+              <Route path="/" element={<LandingPage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route
-                path="/"
+                path="/dashboard"
                 element={
                   <ProtectedRoute>
                     <DashboardPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/dashboard/revenue"
+                element={
+                  <ProtectedRoute>
+                    <RevenueDashboardPage />
                   </ProtectedRoute>
                 }
               />

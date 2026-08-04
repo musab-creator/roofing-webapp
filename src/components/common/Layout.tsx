@@ -1,9 +1,13 @@
 import React, { useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import SideNavbar from './side-navbar';
 import MobileBottomNav from './mobile-bottom-nav';
 import { Toaster } from '../ui/toaster';
 import { CommandPalette } from './command-palette';
 import { useAuth } from '../../hooks/useAuth';
+
+/** Public routes render full-bleed, without the authenticated app chrome. */
+const PUBLIC_ROUTES = ['/', '/login'];
 
 type UserData = {
   avatar_url: string;
@@ -23,6 +27,8 @@ type Props = {
 
 const Layout = ({ children }: Props) => {
   const auth = useAuth();
+  const location = useLocation();
+  const isPublicRoute = PUBLIC_ROUTES.includes(location.pathname);
 
   // Memoize the initial user data structure
   const initialUserData: UserData = useMemo(
@@ -57,6 +63,16 @@ const Layout = ({ children }: Props) => {
   React.useEffect(() => {
     setLoggedInUserData(userData);
   }, [userData]);
+
+  // Public marketing / auth pages render edge-to-edge without app navigation.
+  if (isPublicRoute) {
+    return (
+      <>
+        {children}
+        <Toaster />
+      </>
+    );
+  }
 
   return (
     <>

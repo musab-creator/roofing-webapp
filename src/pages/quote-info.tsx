@@ -306,7 +306,7 @@ export default function QuoteInfoPage() {
             <div className="w-full flex flex-col sm:flex-row sm:justify-between md:px-6 md:pt-5">
               <div className="flex gap-4">
                 <div className="w-[50px] h-max bg-blue-600 rounded-2xl transition ease-in-out duration-300 hover:scale-105">
-                  <Link to={'/'}>
+                  <Link to={'/dashboard'}>
                     <img src="/company-logo.png" className="shadow-xs p-[0px] rounded-2xl" />
                   </Link>
                 </div>

@@ -21,7 +21,7 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { id: 'home', label: 'Home', path: '/', icon: HomeIcon },
+  { id: 'home', label: 'Home', path: '/dashboard', icon: HomeIcon },
   // { id: 'leads', label: 'Leads', path: '/inbox', icon: SpeechIcon, notificationKey: 'leads' },
   {
     id: 'invoices',
