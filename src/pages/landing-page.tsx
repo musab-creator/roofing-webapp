@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import Reveal from '../components/landing/reveal';
 import HeroScene from '../components/landing/hero-scene';
+import BgVideo from '../components/landing/bg-video';
 
 const PHONE_DISPLAY = '(904) 979-0556';
 const PHONE_HREF = 'tel:+19049790556';
@@ -310,6 +311,12 @@ export default function LandingPage() {
       <section id="top" className="relative overflow-hidden">
         {/* Layered gradient / graphic backdrop */}
         <div className="dr-hero-gradient absolute inset-0 bg-[radial-gradient(1200px_600px_at_70%_-10%,#1e40af_0%,transparent_55%),radial-gradient(900px_500px_at_10%_20%,#0c4a6e_0%,transparent_50%),linear-gradient(180deg,#020617_0%,#0b1220_100%)]" />
+        {/* Ambient hero video (renders only when /videos/hero-bg.mp4 exists) */}
+        <BgVideo
+          src="/videos/hero-bg.mp4"
+          className="opacity-40"
+          overlayClassName="bg-gradient-to-b from-slate-950/70 via-slate-950/40 to-slate-950/80"
+        />
         <div className="dr-grid-bg absolute inset-0 opacity-40" />
         <div className="absolute -left-20 top-40 h-72 w-72 rounded-full bg-blue-500/20 blur-3xl" />
         <div className="absolute -right-16 top-10 h-80 w-80 rounded-full bg-amber-500/20 blur-3xl" />
@@ -614,6 +621,11 @@ export default function LandingPage() {
                     </g>
                     <circle cx="330" cy="60" r="26" fill="rgba(255,255,255,0.5)" />
                   </svg>
+                  {/* Project video (renders only when /videos/work-N.mp4 exists) */}
+                  <BgVideo
+                    src={`/videos/work-${i + 1}.mp4`}
+                    className="transition-transform duration-500 group-hover:scale-105"
+                  />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
                   <div className="absolute inset-x-0 bottom-0 p-5">
                     <span className="inline-block rounded-full bg-white/20 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-white backdrop-blur">
