@@ -115,18 +115,215 @@
   fill: hsl(var(--foreground)) !important;
 }
 
+/* ==========================================================================
+   Diversity Roofing — Marketing landing page animations & effects
+   Scoped with the `dr-` prefix so they never collide with the app UI.
+   ========================================================================== */
+@keyframes dr-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-14px);
+  }
+}
+@keyframes dr-float-slow {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-22px) rotate(2deg);
+  }
+}
+@keyframes dr-drift {
+  0% {
+    transform: translateX(-2%);
+  }
+  100% {
+    transform: translateX(102%);
+  }
+}
+@keyframes dr-sun-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.06);
+    opacity: 1;
+  }
+}
+@keyframes dr-spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes dr-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+@keyframes dr-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes dr-gradient-pan {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+@keyframes dr-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.dr-anim-float {
+  animation: dr-float 6s ease-in-out infinite;
+}
+.dr-anim-float-slow {
+  animation: dr-float-slow 9s ease-in-out infinite;
+}
+.dr-anim-sun {
+  animation: dr-sun-pulse 5s ease-in-out infinite;
+  transform-origin: center;
+}
+.dr-anim-spin-slow {
+  animation: dr-spin-slow 40s linear infinite;
+  transform-origin: center;
+}
+.dr-anim-cloud {
+  animation: dr-drift 60s linear infinite;
+}
+.dr-anim-cloud-2 {
+  animation: dr-drift 90s linear infinite;
+}
+.dr-hero-gradient {
+  background-size: 200% 200%;
+  animation: dr-gradient-pan 14s ease infinite;
+}
+
+/* Scroll-reveal */
+.dr-reveal {
+  opacity: 0;
+  transform: translateY(28px);
+  transition:
+    opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+.dr-reveal.dr-in {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Animated shine used on primary CTA buttons */
+.dr-shine {
+  position: relative;
+  overflow: hidden;
+}
+.dr-shine::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    120deg,
+    transparent 20%,
+    rgba(255, 255, 255, 0.35) 50%,
+    transparent 80%
+  );
+  background-size: 200% 100%;
+  animation: dr-shimmer 3.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Form inputs on the dark landing quote card */
+.dr-input {
+  width: 100%;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background-color: rgba(255, 255, 255, 0.06);
+  padding: 0.7rem 0.9rem;
+  font-size: 0.95rem;
+  color: #f8fafc;
+  outline: none;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background-color 0.2s ease;
+}
+.dr-input::placeholder {
+  color: rgba(226, 232, 240, 0.5);
+}
+.dr-input:focus {
+  border-color: #f59e0b;
+  background-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.25);
+}
+.dr-input option {
+  color: #0f172a;
+}
+
+/* Fine dotted / grid backdrop for hero */
+.dr-grid-bg {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dr-anim-float,
+  .dr-anim-float-slow,
+  .dr-anim-sun,
+  .dr-anim-spin-slow,
+  .dr-anim-cloud,
+  .dr-anim-cloud-2,
+  .dr-hero-gradient,
+  .dr-shine::after {
+    animation: none !important;
+  }
+  .dr-reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
 /* Prevent mobile zoom on input focus */
 @media screen and (max-width: 768px) {
-  input[type="text"],
-  input[type="email"],
-  input[type="password"],
-  input[type="search"],
-  input[type="tel"],
-  input[type="url"],
-  input[type="number"],
-  input[type="date"],
-  input[type="datetime-local"],
-  input[type="time"],
+  input[type='text'],
+  input[type='email'],
+  input[type='password'],
+  input[type='search'],
+  input[type='tel'],
+  input[type='url'],
+  input[type='number'],
+  input[type='date'],
+  input[type='datetime-local'],
+  input[type='time'],
   textarea,
   select {
     font-size: 16px !important;

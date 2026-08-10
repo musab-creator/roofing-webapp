@@ -1,6 +1,7 @@
 import React from 'react';
 import { Button } from './button';
-import { LifeBuoyIcon, PlusIcon, GithubIcon, PlusCircleIcon } from 'lucide-react';
+import { LifeBuoyIcon, PlusIcon, GithubIcon, PlusCircleIcon, TrendingUpIcon } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { Separator } from './separator';
 import { Avatar, AvatarFallback, AvatarImage } from './avatar';
 import { useAuth } from '../../hooks/useAuth';
@@ -121,7 +122,12 @@ export function DashboardPageHeader() {
           <p className='text-[12px] font-[400]'>User</p>
         </div>
       </div> */}
-      <div className="mt-auto">
+      <div className="mt-auto flex gap-2">
+        <Link to="/dashboard/revenue">
+          <Button variant={'outline'}>
+            <TrendingUpIcon className="mr-2 h-4 w-4" /> Revenue Analytics
+          </Button>
+        </Link>
         <Button
           variant={'outline'}
           onClick={() =>

@@ -61,7 +61,7 @@ export default function SideNavbar({ userData }: Props) {
         <div className="flex flex-col mx-auto w-full my-4 h-full gap-6">
           <div className="mx-auto">
             <div className="w-[50px] bg-blue-600 rounded-2xl transition ease-in-out duration-300 hover:scale-105">
-              <Link to={'/'}>
+              <Link to={'/dashboard'}>
                 <img src="/assets/TRA-logo.png" className="shadow-xs p-[0px]" />
               </Link>
             </div>

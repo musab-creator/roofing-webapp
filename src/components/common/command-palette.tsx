@@ -9,7 +9,8 @@ import {
   Inbox,
   User,
   Settings,
-  Database
+  Database,
+  TrendingUp
 } from 'lucide-react';
 import {
   Command,
@@ -33,7 +34,8 @@ function useDebounce<T>(value: T, delay: number): T {
 }
 
 const PAGES = [
-  { label: 'Dashboard', path: '/', icon: LayoutDashboard },
+  { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+  { label: 'Revenue Analytics', path: '/dashboard/revenue', icon: TrendingUp },
   { label: 'Customers', path: '/customers', icon: Users },
   { label: 'Jobs', path: '/jobs', icon: Briefcase },
   { label: 'Quotes', path: '/quotes', icon: FileText },
