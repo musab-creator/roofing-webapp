@@ -9,24 +9,27 @@ on:
 jobs:
   build_and_deploy:
     runs-on: ubuntu-latest
+    env:
+      # Step-level `if:` cannot read the `secrets` context, so surface it here.
+      FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_RRIOS_ROOFING_WEBAPP }}
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 'lts/*'
-          
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 9
-          
+
       - name: Get pnpm store directory
         shell: bash
         run: |
           echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-          
+
       - name: Setup pnpm cache
         uses: actions/cache@v4
         with:
@@ -34,16 +37,23 @@ jobs:
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
-            
+
       - name: Install dependencies and build
         run: pnpm install --frozen-lockfile && pnpm run build
         env:
           REACT_APP_SUPABASE_URL: ${{ secrets.REACT_APP_SUPABASE_URL }}
           REACT_APP_SUPABASE_KEY: ${{ secrets.REACT_APP_SUPABASE_KEY }}
-          
-      - uses: FirebaseExtended/action-hosting-deploy@v0
+
+      - name: Skip Firebase live deploy
+        if: env.FIREBASE_SERVICE_ACCOUNT == ''
+        run: |
+          echo "::notice title=Firebase deploy skipped::Build succeeded. No FIREBASE_SERVICE_ACCOUNT_RRIOS_ROOFING_WEBAPP secret is configured for this repository, so the live Hosting deploy was skipped."
+
+      - name: Deploy to Firebase Hosting
+        if: env.FIREBASE_SERVICE_ACCOUNT != ''
+        uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_RRIOS_ROOFING_WEBAPP }}
+          firebaseServiceAccount: ${{ env.FIREBASE_SERVICE_ACCOUNT }}
           channelId: live
-          projectId: rrios-roofing-webapp
+          projectId: ${{ vars.FIREBASE_PROJECT_ID || 'rrios-roofing-webapp' }}
