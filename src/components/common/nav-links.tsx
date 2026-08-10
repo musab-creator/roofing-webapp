@@ -54,6 +54,12 @@ export const navLinks = [
     group: 2
   },
   {
+    title: 'Supplements',
+    icon: <HammerIcon size={'20px'} className="text-zinc-900 dark:text-zinc-300" />,
+    path: '/supplements',
+    group: 2
+  },
+  {
     title: 'Customers',
     icon: <UsersIcon size={'20px'} className="text-zinc-900 dark:text-zinc-300" />,
     path: '/customers',

@@ -30,7 +30,8 @@ import {
   DataManagementPage,
   ServicesManagementPage,
   StatusManagementPage,
-  SettingsPage
+  SettingsPage,
+  SupplementEstimatorPage
 } from './pages';
 import CustomerTypesPage from './pages/customer-types-page';
 import ProfilePage from './pages/profile-page';
@@ -171,6 +172,14 @@ root.render(
                 element={
                   <ProtectedRoute>
                     <SettingsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/supplements"
+                element={
+                  <ProtectedRoute>
+                    <SupplementEstimatorPage />
                   </ProtectedRoute>
                 }
               />
