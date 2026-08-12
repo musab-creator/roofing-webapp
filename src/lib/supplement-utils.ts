@@ -11,7 +11,8 @@ import {
   CategoryCode,
   PriceListId,
   CategoryRecapRow,
-  RoomRecapRow
+  RoomRecapRow,
+  AutoBuildResult
 } from '../types/supplement_types';
 import {
   SUPPLEMENT_CATALOG,
@@ -300,6 +301,16 @@ export function parseRoofReport(raw: string): Partial<RoofMeasurements> {
     out.predominantPitch = p.includes('/') ? p : `${p}/12`;
   }
 
+  const penetrations = findCount(text, ['total penetrations', 'penetrations']);
+  if (penetrations !== undefined) out.penetrations = penetrations;
+
+  // The report's own suggested/recommended waste table.
+  const waste = parseWasteTable(text);
+  if (waste) {
+    out.wasteOptions = waste.options;
+    out.wastePct = waste.recommended;
+  }
+
   if (/roofr/i.test(text)) out.reportSource = 'Roofr Roof Report';
   else if (/quickmeasure/i.test(text)) out.reportSource = 'Source - QuickMeasure Roof Report';
   else if (/eagleview/i.test(text)) out.reportSource = 'EagleView Roof Report';
@@ -327,6 +338,263 @@ export function parseRoofReport(raw: string): Partial<RoofMeasurements> {
     if (typeof v === 'number' && (Number.isNaN(v) || v < 0)) delete out[key];
   }
   return out;
+}
+
+/**
+ * Reads the suggested/recommended waste table a roof report prints and
+ * returns the options plus the one to use.
+ *
+ * Both report styles present a row of percentages ordered from 0% up.
+ * The middle option is the figure our issued estimates have used
+ * (Roofr 0/10/12/15/17/20/22 -> 15%, QuickMeasure 0/6/9/11/13/16/21 -> 11%).
+ */
+export function parseWasteTable(
+  raw: string
+): { options: number[]; recommended: number } | undefined {
+  const m = raw.match(
+    /(?:suggested|recommended)\s*\n?\s*waste\s*%?\s*((?:\d{1,2}\s*%\s*){3,})/i
+  );
+  if (!m) return undefined;
+  const options = Array.from(m[1].matchAll(/(\d{1,2})\s*%/g))
+    .map((x) => parseInt(x[1], 10))
+    .filter((n) => !Number.isNaN(n));
+  if (options.length < 3) return undefined;
+  const recommended = options[Math.floor(options.length / 2)];
+  return { options, recommended };
+}
+
+/**
+ * Shingles are ordered and billed in whole bundles, three to the square,
+ * so the quantity rounds up to the next third of a square. This reproduces
+ * the shingle quantity on every estimate checked.
+ */
+export function shingleSquares(areaSqFt: number, wastePct: number): number {
+  const withWaste = (areaSqFt * (1 + wastePct / 100)) / 100;
+  return round2(Math.ceil(withWaste * 3) / 3);
+}
+
+// ---------------------------------------------------------
+// Regional code rules.
+//
+// The two states we estimate in require different secondary water
+// barrier assemblies, and the Georgia estimates carry a 5% waste
+// allowance on underlayment and perimeter metal that Florida does not.
+// ---------------------------------------------------------
+
+export interface RegionalRules {
+  underlaymentWastePct: number;
+  starterWastePct: number;
+  dripEdgeWastePct: number;
+  secondaryBarrier: 'seam_tape' | 'full_surface';
+  valleyIceWater: boolean;
+  renailNote: string;
+  barrierNote: string;
+}
+
+export const REGIONAL_RULES: Record<PriceListId, RegionalRules> = {
+  FLJA8X_JUN26: {
+    underlaymentWastePct: 0,
+    starterWastePct: 0,
+    dripEdgeWastePct: 0,
+    secondaryBarrier: 'seam_tape',
+    valleyIceWater: true,
+    renailNote: 'FL',
+    barrierNote: 'FL'
+  },
+  GABR8X_FEB26: {
+    underlaymentWastePct: 5,
+    starterWastePct: 5,
+    dripEdgeWastePct: 5,
+    secondaryBarrier: 'full_surface',
+    valleyIceWater: false,
+    renailNote: 'GA',
+    barrierNote: 'GA'
+  }
+};
+
+const RENAIL_NOTE_GA =
+  'Roof sheathing must be completely re-nailed per Georgia State Amendments to the IRC (R602.3 / R803.2) to meet current fastening requirements. Existing fasteners are disturbed and compromised during tear-off and reroof operations; therefore, full re-nailing of all roof deck panels is required to restore structural integrity, ensure proper uplift resistance, and achieve code compliance.';
+
+/** Maps a two-letter state to the price list we estimate that state with. */
+export function priceListForState(state: string): PriceListId | undefined {
+  const s = state.trim().toUpperCase();
+  if (s === 'FL') return 'FLJA8X_JUN26';
+  if (s === 'GA') return 'GABR8X_FEB26';
+  return undefined;
+}
+
+/** Pulls "1923 Sterling Lane, Fernandina Beach, FL 32034" out of report text. */
+export function parsePropertyInfo(raw: string): {
+  address?: string;
+  cityStateZip?: string;
+  state?: string;
+} {
+  const m = raw.match(
+    /(\d+[^,\n]{2,60}?),\s*([A-Za-z .'-]{2,40}),\s*([A-Z]{2})\s*(\d{5})/
+  );
+  if (!m) return {};
+  return {
+    address: m[1].trim(),
+    cityStateZip: `${m[2].trim()}, ${m[3]} ${m[4]}`,
+    state: m[3]
+  };
+}
+
+// ---------------------------------------------------------
+// Adjuster report / claim summary parsing.
+// ---------------------------------------------------------
+
+function grabText(raw: string, labels: string[], stop = '\\n'): string | undefined {
+  for (const label of labels) {
+    const re = new RegExp(`${label}\\s*[:#]?\\s*([^${stop}]{2,80})`, 'i');
+    const m = raw.match(re);
+    if (m && m[1]) {
+      const v = m[1].trim().replace(/\s{2,}/g, ' ');
+      if (v && !/^[:#-]/.test(v)) return v;
+    }
+  }
+  return undefined;
+}
+
+function grabMoney(raw: string, labels: string[]): number | undefined {
+  for (const label of labels) {
+    const re = new RegExp(`${label}[^0-9$]{0,20}\\$?\\s*([\\d,]+(?:\\.\\d{2})?)`, 'i');
+    const m = raw.match(re);
+    if (m && m[1]) {
+      const v = parseFloat(m[1].replace(/,/g, ''));
+      if (!Number.isNaN(v)) return v;
+    }
+  }
+  return undefined;
+}
+
+function grabDate(raw: string, labels: string[]): string | undefined {
+  for (const label of labels) {
+    const re = new RegExp(
+      `${label}\\s*[:]?\\s*(\\d{1,2}[/-]\\d{1,2}[/-]\\d{2,4}|[A-Z][a-z]+\\s+\\d{1,2},?\\s+\\d{4})`,
+      'i'
+    );
+    const m = raw.match(re);
+    if (m && m[1]) return m[1].trim();
+  }
+  return undefined;
+}
+
+/**
+ * Extracts claim facts from a pasted adjuster report, loss notice or
+ * carrier estimate. Only fields actually found are returned, so nothing
+ * is invented.
+ */
+export function parseAdjusterReport(raw: string): {
+  claim: Partial<ClaimInfo>;
+  deductible?: number;
+} {
+  const text = raw.replace(/\r/g, '');
+  const claim: Partial<ClaimInfo> = {};
+
+  const claimNumber = grabText(text, ['claim\\s*(?:number|no\\.?|#)', 'claim']);
+  if (claimNumber && /[\d]/.test(claimNumber)) claim.claimNumber = claimNumber.split(/\s{2,}/)[0];
+
+  const policyNumber = grabText(text, ['policy\\s*(?:number|no\\.?|#)', 'policy']);
+  if (policyNumber && /[\d]/.test(policyNumber))
+    claim.policyNumber = policyNumber.split(/\s{2,}/)[0];
+
+  const insured = grabText(text, ['insured\\s*name', 'insured', 'policyholder', 'homeowner']);
+  if (insured) {
+    // Trim trailing phone numbers that share the header line.
+    claim.insuredName = insured.replace(/\s*(?:home|cell(?:ular)?|phone).*$/i, '').trim();
+    claim.estimateName = toEstimateName(claim.insuredName);
+  }
+
+  const lossType = grabText(text, ['type\\s*of\\s*loss', 'loss\\s*type', 'cause\\s*of\\s*loss']);
+  if (lossType) claim.typeOfLoss = lossType;
+
+  const dol = grabDate(text, ['date\\s*of\\s*loss', 'loss\\s*date', 'dol']);
+  if (dol) claim.dateOfLoss = dol;
+  const contacted = grabDate(text, ['date\\s*contacted']);
+  if (contacted) claim.dateContacted = contacted;
+  const received = grabDate(text, ['date\\s*received']);
+  if (received) claim.dateReceived = received;
+  const inspected = grabDate(text, ['date\\s*inspected', 'inspection\\s*date']);
+  if (inspected) claim.dateInspected = inspected;
+
+  const phone = text.match(/\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}/);
+  if (phone) claim.insuredHomePhone = phone[0].trim();
+  const email = text.match(/[\w.+-]+@[\w-]+\.[\w.]{2,}/);
+  if (email && !/diversity-roofing/i.test(email[0])) claim.insuredEmail = email[0];
+
+  const property = parsePropertyInfo(text);
+  if (property.address) {
+    claim.propertyAddress = property.address;
+    claim.propertyCityStateZip = property.cityStateZip;
+    const list = property.state ? priceListForState(property.state) : undefined;
+    if (list) claim.priceList = list;
+  }
+
+  const deductible = grabMoney(text, ['deductible']);
+
+  return { claim, deductible };
+}
+
+// ---------------------------------------------------------
+// Automatic trade labor minimums.
+//
+// A trade whose work falls below its minimum charge gets a labor
+// minimum line, the way the issued estimates carry them.
+// ---------------------------------------------------------
+
+export function autoLaborMinimums(
+  items: SupplementLineItem[],
+  priceList: PriceListId
+): SupplementLineItem[] {
+  const byCategory = new Map<string, number>();
+  for (const item of items) {
+    if (item.laborMinimum || item.bidItem) continue;
+    byCategory.set(
+      item.category,
+      round2((byCategory.get(item.category) ?? 0) + item.quantity * item.unitPrice)
+    );
+  }
+
+  const added: SupplementLineItem[] = [];
+  for (const entry of SUPPLEMENT_CATALOG) {
+    if (!entry.laborMinimum) continue;
+    const tradeTotal = byCategory.get(entry.category);
+    if (tradeTotal === undefined) continue; // trade not in the estimate
+    const minimum = priceFor(entry, priceList);
+    if (tradeTotal >= minimum) continue; // trade already above its minimum
+    const alreadyPresent = items.some((i) => i.code === entry.code);
+    if (alreadyPresent) continue;
+    added.push(
+      lineItemFromCatalog(entry, 1, priceList, {
+        area: LABOR_MINIMUM_SECTION,
+        room: LABOR_MINIMUM_SECTION
+      })
+    );
+  }
+  return added;
+}
+
+// ---------------------------------------------------------
+// Date helpers matching the estimate header format.
+// ---------------------------------------------------------
+
+export function formatEstimateDateTime(d: Date = new Date()): string {
+  const date = d.toLocaleDateString('en-US', {
+    month: 'numeric',
+    day: 'numeric',
+    year: 'numeric'
+  });
+  const time = d.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
+  return `${date} ${time}`;
+}
+
+export function formatEstimateDate(d: Date = new Date()): string {
+  return d.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' });
 }
 
 // ---------------------------------------------------------
@@ -397,8 +665,9 @@ export function generateScopeFromMeasurements(
     area: options?.area ?? 'Exterior',
     room: options?.room ?? 'Dwelling Roof'
   };
-  const squares = area / 100;
-  const wastedSquares = squares * (1 + (m.wastePct ?? 10) / 100);
+  const rules = REGIONAL_RULES[priceList] ?? REGIONAL_RULES[DEFAULT_PRICE_LIST];
+  const squares = round2(area / 100);
+  const wastePct = m.wastePct ?? 15;
 
   const add = (code: string, qty: number, note?: string) => {
     const entry = findCatalogItem(code);
@@ -407,36 +676,56 @@ export function generateScopeFromMeasurements(
   };
 
   add('RFG_TEAROFF_LAM', squares);
-  add('RFG_RENAIL', area);
-  add('RFG_FELT_30', squares);
-  if (options?.fullDeckMembrane) {
+
+  const renail = findCatalogItem('RFG_RENAIL');
+  if (renail) {
+    items.push(
+      lineItemFromCatalog(
+        renail,
+        area,
+        priceList,
+        place,
+        rules.renailNote === 'GA' ? RENAIL_NOTE_GA : renail.defaultNote
+      )
+    );
+  }
+
+  add('RFG_FELT_30', round2(squares * (1 + rules.underlaymentWastePct / 100)));
+
+  // Secondary water barrier assembly follows the state's code path.
+  const useFullSurface =
+    options?.fullDeckMembrane ?? rules.secondaryBarrier === 'full_surface';
+  if (useFullSurface) {
     add('RFG_WATER_BARRIER_FULL', area);
   } else {
     add('RFG_SEAM_TAPE', area);
   }
 
-  const starter = m.starterLf ?? round2((m.eaveLf ?? 0) + (m.rakeLf ?? 0));
-  add('RFG_STARTER', starter);
+  const starterBase = m.starterLf ?? round2((m.eaveLf ?? 0) + (m.rakeLf ?? 0));
+  add('RFG_STARTER', round2(starterBase * (1 + rules.starterWastePct / 100)));
 
-  if (m.valleyLf && m.valleyLf > 0) {
+  if (rules.valleyIceWater && m.valleyLf && m.valleyLf > 0) {
     add('RFG_ICE_WATER', round2(m.valleyLf * 3));
   }
 
-  add(
-    'RFG_SHINGLE_LAM',
-    wastedSquares,
-    `${m.wastePct}% wastage included per roof report due to roof size and complexity.`
-  );
+  const wasteJustification = m.wasteOptions?.length
+    ? `${wastePct}% wastage included per roof report (report suggested ${m.wasteOptions
+        .map((o) => `${o}%`)
+        .join(' / ')}) due to roof size and complexity. Quantity rounded up to whole bundles.`
+    : `${wastePct}% wastage included per roof report due to roof size and complexity. Quantity rounded up to whole bundles.`;
+  add('RFG_SHINGLE_LAM', shingleSquares(area, wastePct), wasteJustification);
 
   const ridgeCap = m.ridgeCapLf ?? round2((m.ridgeLf ?? 0) + (m.hipLf ?? 0));
   add('RFG_RIDGE_CAP', ridgeCap);
 
-  const dripEdge = m.dripEdgeLf ?? starter;
-  add('RFG_DRIP_EDGE', dripEdge);
-  add('RFG_SEALANT_LF', dripEdge);
+  const dripEdgeBase = m.dripEdgeLf ?? starterBase;
+  add('RFG_DRIP_EDGE', round2(dripEdgeBase * (1 + rules.dripEdgeWastePct / 100)));
+  add('RFG_SEALANT_LF', dripEdgeBase);
 
-  if (m.pipeJacks) add('RFG_PIPE_JACK', m.pipeJacks);
-  if (m.pipeJacks) add('PNT_ROOF_JACK', m.pipeJacks);
+  // Penetration count from the report seeds the pipe-jack quantity.
+  const pipeJacks = m.pipeJacks ?? m.penetrations;
+  if (pipeJacks) add('RFG_PIPE_JACK', pipeJacks);
+  if (pipeJacks) add('PNT_ROOF_JACK', pipeJacks);
   if (m.chimneys) add('RFG_CHIMNEY_FLASHING', m.chimneys);
   if (m.offRidgeVents) add('RFG_VENT_OFF_RIDGE_4', m.offRidgeVents);
   if (m.ridgeVentLf) add('RFG_RIDGE_VENT', m.ridgeVentLf);
@@ -444,7 +733,7 @@ export function generateScopeFromMeasurements(
   if (m.exhaustCaps || m.offRidgeVents) {
     add('PNT_ROOF_VENT', (m.exhaustCaps ?? 0) + (m.offRidgeVents ?? 0));
   }
-  if (m.pipeJacks) add('RFG_MASTIC_VENT', m.pipeJacks);
+  if (pipeJacks) add('RFG_MASTIC_VENT', pipeJacks);
   if (m.wallFlashingLf) add('RFG_SIDEWALL_FLASHING', m.wallFlashingLf);
   if (m.stepFlashingLf) add('RFG_STEP_FLASHING', m.stepFlashingLf);
   if (m.skylights) add('RFG_SKYLIGHT_FIXED', m.skylights);
@@ -460,6 +749,148 @@ export function generateScopeFromMeasurements(
   add('DBR_HAUL_TRUCK', Math.max(1, Math.ceil(squares / 30)));
 
   return items;
+}
+
+// ---------------------------------------------------------
+// One-shot build: pasted reports in, complete estimate out.
+// ---------------------------------------------------------
+
+/**
+ * Builds a complete, submittable estimate from a roof report and an
+ * optional adjuster report, resolving everything that can be derived:
+ * measurements, property and claim details, price list and tax rate for
+ * the state, the code path for the secondary water barrier, the waste
+ * factor from the report's own table, the full line-item scope with
+ * justifications, and trade labor minimums.
+ *
+ * Returns what was resolved and what still needs a person, so nothing
+ * is silently assumed.
+ */
+export function buildEstimateFromReports(
+  roofReportText: string,
+  adjusterReportText?: string,
+  base?: SupplementEstimate
+): AutoBuildResult {
+  const resolved: string[] = [];
+  const needsAttention: string[] = [];
+  const estimate: SupplementEstimate = base ? { ...base } : newEstimate();
+  estimate.claim = { ...estimate.claim };
+  estimate.settings = { ...estimate.settings };
+
+  // 1. Roof report -> measurements.
+  const measurements = parseRoofReport(roofReportText);
+  const measurementCount = Object.values(measurements).filter((v) => v !== undefined).length;
+  estimate.measurements = { ...defaultMeasurements(), ...measurements };
+  if (measurementCount > 0) {
+    resolved.push(`${measurementCount} roof measurements read from the report`);
+  } else {
+    needsAttention.push('No measurements could be read — enter them by hand');
+  }
+  if (measurements.wasteOptions?.length) {
+    resolved.push(
+      `Waste set to ${estimate.measurements.wastePct}% from the report's suggested table (${measurements.wasteOptions
+        .map((o) => `${o}%`)
+        .join('/')})`
+    );
+  }
+
+  // 2. Property location, from the adjuster report first, else the roof report.
+  const adjuster = adjusterReportText ? parseAdjusterReport(adjusterReportText) : undefined;
+  if (adjuster) {
+    const claimFields = Object.entries(adjuster.claim).filter(([, v]) => v);
+    estimate.claim = { ...estimate.claim, ...adjuster.claim };
+    if (claimFields.length > 0) {
+      resolved.push(
+        `${claimFields.length} claim fields read from the adjuster report (${claimFields
+          .map(([k]) => k.replace(/([A-Z])/g, ' $1').toLowerCase().trim())
+          .join(', ')})`
+      );
+    }
+    if (adjuster.deductible !== undefined) {
+      estimate.settings.deductible = adjuster.deductible;
+      resolved.push(`Deductible set to $${adjuster.deductible.toLocaleString('en-US')}`);
+    }
+  }
+  if (!estimate.claim.propertyAddress) {
+    const fromRoof = parsePropertyInfo(roofReportText);
+    if (fromRoof.address) {
+      estimate.claim.propertyAddress = fromRoof.address;
+      estimate.claim.propertyCityStateZip = fromRoof.cityStateZip ?? '';
+      resolved.push(`Property address read from the roof report`);
+      const list = fromRoof.state ? priceListForState(fromRoof.state) : undefined;
+      if (list) estimate.claim.priceList = list;
+    }
+  }
+
+  // 3. Price list and tax rate follow the property's state.
+  const stateMatch = (estimate.claim.propertyCityStateZip || '').match(/\b([A-Z]{2})\b/);
+  const listForState = stateMatch ? priceListForState(stateMatch[1]) : undefined;
+  if (listForState) {
+    estimate.claim.priceList = listForState;
+    const info = PRICE_LISTS.find((p) => p.id === listForState);
+    if (info) {
+      estimate.settings.salesTaxPct = info.defaultSalesTaxPct;
+      resolved.push(
+        `Price list ${listForState} and ${info.defaultSalesTaxPct}% material tax selected for ${stateMatch![1]}`
+      );
+    }
+    const rules = REGIONAL_RULES[listForState];
+    resolved.push(
+      rules.secondaryBarrier === 'full_surface'
+        ? 'Secondary water barrier written as full-surface membrane (Georgia AU408.1)'
+        : 'Secondary water barrier written as 4" seam tape (Florida R905.1.1.1)'
+    );
+  } else if (!estimate.claim.propertyAddress) {
+    needsAttention.push('Property address not found — price list left at its default');
+  }
+
+  // 4. Dates: only the entry timestamp can be known automatically.
+  estimate.claim.dateEntered = formatEstimateDateTime();
+  resolved.push('Date entered stamped');
+  if (!estimate.claim.dateOfLoss) {
+    needsAttention.push('Date of loss — supply from the claim');
+  }
+  if (!estimate.claim.claimNumber) {
+    needsAttention.push('Claim number — supply from the claim');
+  }
+
+  // 5. Estimate naming.
+  if (estimate.claim.insuredName && !estimate.claim.estimateName) {
+    estimate.claim.estimateName = toEstimateName(estimate.claim.insuredName);
+  }
+  if (!estimate.claim.estimateName && estimate.claim.propertyAddress) {
+    estimate.claim.estimateName = toEstimateName(estimate.claim.propertyAddress);
+  }
+  estimate.title = estimate.claim.propertyAddress
+    ? `Supplement Estimate - ${estimate.claim.propertyAddress}`
+    : estimate.title;
+  if (!estimate.claim.insuredName) {
+    needsAttention.push('Insured name — supply from the claim');
+  }
+
+  // 6. Scope.
+  const scope = generateScopeFromMeasurements(
+    estimate.measurements,
+    estimate.claim.priceList
+  );
+  estimate.lineItems = scope;
+  if (scope.length > 0) {
+    resolved.push(`${scope.length} line items written with code-citation justifications`);
+  }
+
+  // 7. Trade labor minimums.
+  if (estimate.settings.autoLaborMinimums) {
+    const minimums = autoLaborMinimums(estimate.lineItems, estimate.claim.priceList);
+    if (minimums.length > 0) {
+      estimate.lineItems = [...estimate.lineItems, ...minimums];
+      resolved.push(
+        `${minimums.length} trade labor minimum${minimums.length === 1 ? '' : 's'} applied`
+      );
+    }
+  }
+
+  estimate.updatedAt = new Date().toISOString();
+  return { estimate, resolved, needsAttention };
 }
 
 // ---------------------------------------------------------
@@ -520,7 +951,8 @@ export function defaultSettings(): EstimateSettings {
     profitPct: 10,
     applyOAndP: true,
     recoverableDepreciation: true,
-    deductible: 0
+    deductible: 0,
+    autoLaborMinimums: true
   };
 }
 

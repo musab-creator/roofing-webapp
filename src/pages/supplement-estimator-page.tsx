@@ -37,7 +37,10 @@ import {
   PlusIcon,
   SearchIcon,
   Trash2Icon,
-  WandSparklesIcon
+  WandSparklesIcon,
+  ZapIcon,
+  CheckCircle2Icon,
+  AlertCircleIcon
 } from 'lucide-react';
 import {
   SupplementEstimate,
@@ -59,7 +62,9 @@ import {
   deleteEstimate,
   toEstimateName,
   findCatalogItem,
-  LABOR_MINIMUM_SECTION
+  LABOR_MINIMUM_SECTION,
+  buildEstimateFromReports,
+  autoLaborMinimums
 } from '../lib/supplement-utils';
 import { searchCatalog, PRICE_LISTS, priceFor } from '../data/supplement-catalog';
 import SupplementDocument from '../components/pdf-render/supplement-doc';
@@ -138,6 +143,12 @@ export default function SupplementEstimatorPage() {
   const [fullDeckMembrane, setFullDeckMembrane] = React.useState(false);
   const [targetArea, setTargetArea] = React.useState('Exterior');
   const [targetRoom, setTargetRoom] = React.useState('Dwelling Roof');
+  const [autoRoofText, setAutoRoofText] = React.useState('');
+  const [autoAdjusterText, setAutoAdjusterText] = React.useState('');
+  const [autoResult, setAutoResult] = React.useState<{
+    resolved: string[];
+    needsAttention: string[];
+  } | null>(null);
 
   const totals = React.useMemo(
     () => calcEstimateTotals(estimate.lineItems, estimate.settings),
@@ -192,6 +203,36 @@ export default function SupplementEstimatorPage() {
     }
     setEstimate((prev) => ({ ...prev, lineItems: [...prev.lineItems, item] }));
     toast({ title: 'Line item added', description: entry.description });
+  };
+
+  /** One button: pasted reports in, complete estimate out. */
+  const handleAutoBuild = () => {
+    if (!autoRoofText.trim() && !autoAdjusterText.trim()) {
+      toast({
+        title: 'Paste a report first',
+        description: 'Add a roof report, an adjuster report, or both.',
+        variant: 'destructive'
+      });
+      return;
+    }
+    const result = buildEstimateFromReports(autoRoofText, autoAdjusterText || undefined);
+    setEstimate(result.estimate);
+    setAutoResult({ resolved: result.resolved, needsAttention: result.needsAttention });
+    const totalsNow = calcEstimateTotals(result.estimate.lineItems, result.estimate.settings);
+    toast({
+      title: `Estimate built — RCV ${money(totalsNow.rcv)}`,
+      description: `${result.estimate.lineItems.length} line items, ${result.resolved.length} details resolved automatically.`
+    });
+  };
+
+  const handleApplyLaborMinimums = () => {
+    const added = autoLaborMinimums(estimate.lineItems, estimate.claim.priceList);
+    if (added.length === 0) {
+      toast({ title: 'No labor minimums needed', description: 'Every trade is above its minimum.' });
+      return;
+    }
+    setEstimate((prev) => ({ ...prev, lineItems: [...prev.lineItems, ...added] }));
+    toast({ title: `Applied ${added.length} trade labor minimum(s)` });
   };
 
   const handleParseReport = () => {
@@ -378,6 +419,93 @@ export default function SupplementEstimatorPage() {
           Save Estimate
         </Button>
       </div>
+
+      {/* Auto-build: paste reports, get a finished estimate */}
+      <Card className="border-blue-500/40">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <ZapIcon className="w-4 h-4 text-blue-500" /> Build Estimate Automatically
+          </CardTitle>
+          <CardDescription>
+            Paste the roof report and the adjuster report. Everything that can be derived is —
+            measurements, claim details, price list and tax for the state, the code path for the
+            secondary water barrier, waste factor from the report&apos;s own table, the full line-item
+            scope with code citations, and trade labor minimums.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1">
+              <Label className="text-xs text-muted-foreground">
+                Roof report text (Roofr / QuickMeasure / EagleView)
+              </Label>
+              <Textarea
+                rows={7}
+                value={autoRoofText}
+                onChange={(e) => setAutoRoofText(e.target.value)}
+                placeholder={
+                  '1923 Sterling Lane, Fernandina Beach, FL 32034\nTotal roof area 2802 sqft\nPredominant pitch 6/12\nTotal eaves 188ft 7in\nTotal rakes 79ft 8in\nHips + ridges 150ft 3in\nTotal valleys 41ft 2in\nTotal step flashing 45ft 0in\nRecommended\nWaste % 0% 10% 12% 15% 17% 20% 22%'
+                }
+                className="text-xs font-mono"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label className="text-xs text-muted-foreground">
+                Adjuster report / loss notice (optional)
+              </Label>
+              <Textarea
+                rows={7}
+                value={autoAdjusterText}
+                onChange={(e) => setAutoAdjusterText(e.target.value)}
+                placeholder={
+                  'Insured: Corrine Mulligan\nClaim Number: FL26-0109563-J926\nPolicy Number: 1504-2001-0576\nType of Loss: Wind Damage\nDate of Loss: 3/16/2026\nDate Inspected: 7/7/2026\nDeductible: $1,000.00'
+                }
+                className="text-xs font-mono"
+              />
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button onClick={handleAutoBuild}>
+              <ZapIcon className="w-4 h-4 mr-1" /> Build Complete Estimate
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              Replaces the current estimate. Everything stays editable afterwards.
+            </span>
+          </div>
+
+          {autoResult && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+              <div className="rounded-md border p-3">
+                <p className="text-xs font-medium flex items-center gap-1 mb-2">
+                  <CheckCircle2Icon className="w-3.5 h-3.5 text-green-600" /> Resolved
+                  automatically
+                </p>
+                <ul className="text-xs text-muted-foreground flex flex-col gap-1">
+                  {autoResult.resolved.map((r, i) => (
+                    <li key={i}>• {r}</li>
+                  ))}
+                </ul>
+              </div>
+              <div className="rounded-md border p-3">
+                <p className="text-xs font-medium flex items-center gap-1 mb-2">
+                  <AlertCircleIcon className="w-3.5 h-3.5 text-amber-500" /> Needs your input
+                </p>
+                {autoResult.needsAttention.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    Nothing outstanding — the estimate is ready to review.
+                  </p>
+                ) : (
+                  <ul className="text-xs text-muted-foreground flex flex-col gap-1">
+                    {autoResult.needsAttention.map((r, i) => (
+                      <li key={i}>• {r}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="xl:col-span-2 flex flex-col gap-6">
@@ -730,12 +858,27 @@ export default function SupplementEstimatorPage() {
                 value={m.satelliteDishes}
                 onChange={(v) => updateMeasurements({ satelliteDishes: v })}
               />
-              <NumField
-                label="Waste Factor"
-                suffix="%"
-                value={m.wastePct}
-                onChange={(v) => updateMeasurements({ wastePct: v ?? 15 })}
-              />
+              <div className="flex flex-col gap-1">
+                <NumField
+                  label="Waste Factor"
+                  suffix="%"
+                  value={m.wastePct}
+                  onChange={(v) => updateMeasurements({ wastePct: v ?? 15 })}
+                />
+                {m.wasteOptions?.length ? (
+                  <div className="flex flex-wrap gap-1">
+                    {m.wasteOptions.map((o) => (
+                      <Badge
+                        key={o}
+                        variant={o === m.wastePct ? 'default' : 'outline'}
+                        className="text-[10px] cursor-pointer"
+                        onClick={() => updateMeasurements({ wastePct: o })}>
+                        {o}%
+                      </Badge>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
 
               <div className="col-span-2 md:col-span-4">
                 <Separator className="my-1" />
@@ -1023,6 +1166,21 @@ export default function SupplementEstimatorPage() {
                   onCheckedChange={(v) => updateSettings({ recoverableDepreciation: v })}
                 />
               </div>
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <Label className="text-sm">Auto trade labor minimums</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Adds a labor minimum for any trade under its minimum charge.
+                  </p>
+                </div>
+                <Switch
+                  checked={estimate.settings.autoLaborMinimums}
+                  onCheckedChange={(v) => updateSettings({ autoLaborMinimums: v })}
+                />
+              </div>
+              <Button variant="outline" size="sm" onClick={handleApplyLaborMinimums}>
+                Apply labor minimums now
+              </Button>
               <NumField
                 label="Deductible"
                 suffix="$"

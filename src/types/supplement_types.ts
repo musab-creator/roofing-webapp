@@ -144,6 +144,10 @@ export interface RoofMeasurements {
   satelliteDishes?: number;
   /** Waste percentage applied to the shingle line. */
   wastePct: number;
+  /** Waste options the report offered, used to pick and justify wastePct. */
+  wasteOptions?: number[];
+  /** Penetration count reported, used as a pipe-jack starting point. */
+  penetrations?: number;
   /** Report source label printed as the area name on the estimate. */
   reportSource?: string;
 }
@@ -183,8 +187,19 @@ export interface EstimateSettings {
   applyOAndP: boolean;
   recoverableDepreciation: boolean;
   deductible: number;
+  /** Add trade labor minimums automatically for under-minimum trades. */
+  autoLaborMinimums: boolean;
   /** Optional note printed above the summary, e.g. draft status. */
   coverPageNote?: string;
+}
+
+/** What a one-shot build from pasted reports resolved automatically. */
+export interface AutoBuildResult {
+  estimate: SupplementEstimate;
+  /** Human-readable list of everything that was filled in automatically. */
+  resolved: string[];
+  /** Fields that still need a person, e.g. a missing date of loss. */
+  needsAttention: string[];
 }
 
 export interface SupplementEstimate {
