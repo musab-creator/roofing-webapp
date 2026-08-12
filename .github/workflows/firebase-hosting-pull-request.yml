@@ -43,8 +43,16 @@ jobs:
           REACT_APP_SUPABASE_URL: ${{ secrets.REACT_APP_SUPABASE_URL }}
           REACT_APP_SUPABASE_KEY: ${{ secrets.REACT_APP_SUPABASE_KEY }}
           
-      - uses: FirebaseExtended/action-hosting-deploy@v0
+      # Preview deploys require the Firebase service account secret; skip
+      # (instead of failing the check) when it isn't configured on the repo.
+      - name: Deploy preview to Firebase Hosting
+        if: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_RRIOS_ROOFING_WEBAPP != '' }}
+        uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_RRIOS_ROOFING_WEBAPP }}
           projectId: rrios-roofing-webapp
+
+      - name: Note about skipped preview deploy
+        if: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_RRIOS_ROOFING_WEBAPP == '' }}
+        run: echo "FIREBASE_SERVICE_ACCOUNT_RRIOS_ROOFING_WEBAPP secret is not set — build succeeded, preview deploy skipped."
