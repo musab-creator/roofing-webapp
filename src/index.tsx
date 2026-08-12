@@ -38,6 +38,7 @@ import { Layout, ProtectedRoute } from './components';
 import { AuthProvider } from './hooks/useAuth';
 import InvoiceInfoPage from './pages/invoice-info';
 import QuoteInfoPage from './pages/quote-info';
+import WebsitePage from './pages/website';
 
 const container = document.getElementById('app');
 if (!container) throw new Error('Failed to find the root element');
@@ -53,6 +54,8 @@ root.render(
         <AuthProvider>
           <Layout>
             <Routes>
+              {/* Public marketing website — no auth required */}
+              <Route path="/website" element={<WebsitePage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route
                 path="/"
