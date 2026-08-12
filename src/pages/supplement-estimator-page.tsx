@@ -24,7 +24,6 @@ import {
   SelectTrigger,
   SelectValue
 } from '../components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { useToast } from '../components/ui/use-toast';
 import { PDFViewer, PDFDownloadLink } from '@react-pdf/renderer';
 import {
@@ -44,7 +43,8 @@ import {
   SupplementEstimate,
   SupplementLineItem,
   RoofMeasurements,
-  CatalogItem
+  CatalogItem,
+  PriceListId
 } from '../types/supplement_types';
 import {
   calcEstimateTotals,
@@ -56,29 +56,30 @@ import {
   newEstimate,
   loadEstimates,
   upsertEstimate,
-  deleteEstimate
+  deleteEstimate,
+  toEstimateName,
+  findCatalogItem,
+  LABOR_MINIMUM_SECTION
 } from '../lib/supplement-utils';
-import { searchCatalog, TRADE_NAMES } from '../data/supplement-catalog';
+import { searchCatalog, PRICE_LISTS, priceFor } from '../data/supplement-catalog';
 import SupplementDocument from '../components/pdf-render/supplement-doc';
-import { formatMoneyValue } from '../lib/utils';
 
 // ------------------------------------------------------------------
-// Xactimate-style Supplement Estimate Creator
+// Supplement estimate creator, in the format Diversity Roofing issues.
 // ------------------------------------------------------------------
 
-const money = (n: number) => formatMoneyValue(n);
+const money = (n: number) =>
+  n.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 
-function NumberField({
+function NumField({
   label,
   value,
   onChange,
-  step = 'any',
   suffix
 }: {
   label: string;
   value: number | undefined;
   onChange: (v: number | undefined) => void;
-  step?: string;
   suffix?: string;
 }) {
   return (
@@ -89,7 +90,7 @@ function NumberField({
       </Label>
       <Input
         type="number"
-        step={step}
+        step="any"
         value={value ?? ''}
         onChange={(e) => onChange(e.target.value === '' ? undefined : Number(e.target.value))}
         className="h-8"
@@ -98,7 +99,7 @@ function NumberField({
   );
 }
 
-function TextField({
+function TxtField({
   label,
   value,
   onChange,
@@ -131,81 +132,66 @@ export default function SupplementEstimatorPage() {
   });
   const [catalogQuery, setCatalogQuery] = React.useState('');
   const [reportText, setReportText] = React.useState('');
-  const [reportDialogOpen, setReportDialogOpen] = React.useState(false);
+  const [reportOpen, setReportOpen] = React.useState(false);
   const [pdfOpen, setPdfOpen] = React.useState(false);
   const [roofAgeYears, setRoofAgeYears] = React.useState<number | undefined>(undefined);
+  const [fullDeckMembrane, setFullDeckMembrane] = React.useState(false);
+  const [targetArea, setTargetArea] = React.useState('Exterior');
+  const [targetRoom, setTargetRoom] = React.useState('Dwelling Roof');
 
   const totals = React.useMemo(
     () => calcEstimateTotals(estimate.lineItems, estimate.settings),
     [estimate.lineItems, estimate.settings]
   );
-
   const catalogResults = React.useMemo(() => searchCatalog(catalogQuery), [catalogQuery]);
 
-  // ---------- mutations ----------
   const update = (patch: Partial<SupplementEstimate>) =>
     setEstimate((prev) => ({ ...prev, ...patch }));
-
   const updateClaim = (patch: Partial<SupplementEstimate['claim']>) =>
     setEstimate((prev) => ({ ...prev, claim: { ...prev.claim, ...patch } }));
-
   const updateSettings = (patch: Partial<SupplementEstimate['settings']>) =>
     setEstimate((prev) => ({ ...prev, settings: { ...prev.settings, ...patch } }));
-
   const updateMeasurements = (patch: Partial<RoofMeasurements>) =>
     setEstimate((prev) => ({ ...prev, measurements: { ...prev.measurements, ...patch } }));
-
   const updateLineItem = (id: string, patch: Partial<SupplementLineItem>) =>
     setEstimate((prev) => ({
       ...prev,
       lineItems: prev.lineItems.map((li) => (li.id === id ? { ...li, ...patch } : li))
     }));
-
   const removeLineItem = (id: string) =>
+    setEstimate((prev) => ({ ...prev, lineItems: prev.lineItems.filter((li) => li.id !== id) }));
+
+  /** Switching price list re-prices every line that came from the catalog. */
+  const changePriceList = (id: PriceListId) => {
+    const list = PRICE_LISTS.find((p) => p.id === id);
     setEstimate((prev) => ({
       ...prev,
-      lineItems: prev.lineItems.filter((li) => li.id !== id)
+      claim: { ...prev.claim, priceList: id },
+      settings: {
+        ...prev.settings,
+        salesTaxPct: list?.defaultSalesTaxPct ?? prev.settings.salesTaxPct
+      },
+      lineItems: prev.lineItems.map((li) => {
+        const entry = li.code ? findCatalogItem(li.code) : undefined;
+        return entry ? { ...li, unitPrice: priceFor(entry, id) } : li;
+      })
     }));
+    toast({
+      title: `Price list set to ${id}`,
+      description: 'Catalog line items were re-priced to this list.'
+    });
+  };
 
   const addCatalogItem = (entry: CatalogItem) => {
-    const item = lineItemFromCatalog(entry, 1, 'Roof');
+    const item = lineItemFromCatalog(entry, 1, estimate.claim.priceList, {
+      area: entry.laborMinimum ? LABOR_MINIMUM_SECTION : targetArea,
+      room: entry.laborMinimum ? LABOR_MINIMUM_SECTION : targetRoom
+    });
     if (!item.nonDepreciable && roofAgeYears) {
       item.depreciationPct = ageBasedDepreciationPct(roofAgeYears, entry.lifeYears);
     }
     setEstimate((prev) => ({ ...prev, lineItems: [...prev.lineItems, item] }));
-    toast({ title: `Added ${entry.cat} ${entry.sel}`, description: entry.description });
-  };
-
-  const handleSave = () => {
-    const all = upsertEstimate(estimate);
-    setEstimates(all);
-    toast({ title: 'Estimate saved', description: estimate.title });
-  };
-
-  const handleNew = () => {
-    const fresh = newEstimate();
-    setEstimate(fresh);
-    toast({ title: 'New estimate started' });
-  };
-
-  const handleDelete = (id: string) => {
-    const all = deleteEstimate(id);
-    setEstimates(all);
-    if (estimate.id === id) setEstimate(all[0] ?? newEstimate());
-    toast({ title: 'Estimate deleted' });
-  };
-
-  const handleDuplicate = () => {
-    const copy: SupplementEstimate = {
-      ...newEstimate(),
-      title: `${estimate.title} (Copy)`,
-      claim: { ...estimate.claim },
-      measurements: { ...estimate.measurements },
-      settings: { ...estimate.settings },
-      lineItems: estimate.lineItems.map((li) => ({ ...li, id: `${li.id}-c${Math.random().toString(36).slice(2, 6)}` }))
-    };
-    setEstimate(copy);
-    toast({ title: 'Estimate duplicated', description: copy.title });
+    toast({ title: 'Line item added', description: entry.description });
   };
 
   const handleParseReport = () => {
@@ -214,43 +200,44 @@ export default function SupplementEstimatorPage() {
     if (found.length === 0) {
       toast({
         title: 'No measurements found',
-        description: 'Could not read values from the pasted report. Enter them manually below.',
+        description: 'Could not read values from that text. Enter them manually below.',
         variant: 'destructive'
       });
       return;
     }
     updateMeasurements(parsed);
-    setReportDialogOpen(false);
+    setReportOpen(false);
     toast({
-      title: `Imported ${found.length} measurement${found.length === 1 ? '' : 's'} from report`,
-      description: 'Review the values, then use Generate Scope to build the line items.'
+      title: `Imported ${found.length} measurements`,
+      description: 'Review the values, then use Generate Scope.'
     });
   };
 
   const handleGenerateScope = () => {
-    const generated = generateScopeFromMeasurements(estimate.measurements);
+    const generated = generateScopeFromMeasurements(
+      estimate.measurements,
+      estimate.claim.priceList,
+      { area: targetArea, room: targetRoom, fullDeckMembrane }
+    );
     if (generated.length === 0) {
       toast({
         title: 'Total roof area required',
-        description: 'Enter at least the total roof area (sq ft) before generating a scope.',
+        description: 'Enter the total roof area before generating a scope.',
         variant: 'destructive'
       });
       return;
     }
     if (roofAgeYears) {
       for (const item of generated) {
-        if (!item.nonDepreciable) {
-          const entry = searchCatalog(`${item.cat} ${item.sel}`).find(
-            (c) => c.cat === item.cat && c.sel === item.sel
-          );
-          item.depreciationPct = ageBasedDepreciationPct(roofAgeYears, entry?.lifeYears);
-        }
+        if (item.nonDepreciable) continue;
+        const entry = item.code ? findCatalogItem(item.code) : undefined;
+        item.depreciationPct = ageBasedDepreciationPct(roofAgeYears, entry?.lifeYears);
       }
     }
     setEstimate((prev) => ({ ...prev, lineItems: [...prev.lineItems, ...generated] }));
     toast({
       title: `Generated ${generated.length} line items`,
-      description: 'Full replacement scope built from the roof measurements.'
+      description: `Roof replacement scope written into ${targetArea} › ${targetRoom}.`
     });
   };
 
@@ -260,22 +247,66 @@ export default function SupplementEstimatorPage() {
       ...prev,
       lineItems: prev.lineItems.map((li) => {
         if (li.nonDepreciable) return li;
-        const entry = searchCatalog(`${li.cat} ${li.sel}`).find(
-          (c) => c.cat === li.cat && c.sel === li.sel
-        );
+        const entry = li.code ? findCatalogItem(li.code) : undefined;
         return { ...li, depreciationPct: ageBasedDepreciationPct(roofAgeYears, entry?.lifeYears) };
       })
     }));
-    toast({ title: `Applied ${roofAgeYears}-year age depreciation to all depreciable items` });
+    toast({ title: `Applied ${roofAgeYears}-year depreciation to depreciable items` });
+  };
+
+  const handleSave = () => {
+    setEstimates(upsertEstimate(estimate));
+    toast({ title: 'Estimate saved', description: estimate.title });
+  };
+  const handleNew = () => {
+    setEstimate(newEstimate());
+    toast({ title: 'New estimate started' });
+  };
+  const handleDelete = (id: string) => {
+    const all = deleteEstimate(id);
+    setEstimates(all);
+    if (estimate.id === id) setEstimate(all[0] ?? newEstimate());
+    toast({ title: 'Estimate deleted' });
+  };
+  const handleDuplicate = () => {
+    const copy: SupplementEstimate = {
+      ...newEstimate(),
+      title: `${estimate.title} (Copy)`,
+      claim: { ...estimate.claim },
+      measurements: { ...estimate.measurements },
+      settings: { ...estimate.settings },
+      lineItems: estimate.lineItems.map((li) => ({
+        ...li,
+        id: `${li.id}-c${Math.random().toString(36).slice(2, 6)}`
+      }))
+    };
+    setEstimate(copy);
+    toast({ title: 'Estimate duplicated' });
   };
 
   const m = estimate.measurements;
+  const fileName = `Supplement Estimate - ${
+    estimate.claim.propertyAddress || estimate.claim.estimateName || 'Estimate'
+  }.pdf`;
+
+  // Distinct area/room pairs already used, offered as quick targets.
+  const placements = React.useMemo(() => {
+    const set = new Set<string>();
+    for (const li of estimate.lineItems) {
+      if (!li.laborMinimum) set.add(`${li.area}||${li.room}`);
+    }
+    set.add('Exterior||Dwelling Roof');
+    return Array.from(set).map((k) => {
+      const [area, room] = k.split('||');
+      return { area, room };
+    });
+  }, [estimate.lineItems]);
 
   return (
     <div className="flex flex-col w-full gap-6 mb-6">
       <DefaultPageHeader
         title="Supplements"
-        subheading="Build insurance supplement estimates in the industry-standard RCV / depreciation / ACV format."
+        subheading="Write supplement estimates in the Diversity Roofing format — per-line O&P, RCV / depreciation / ACV, and the full recap pages."
       />
 
       {/* Toolbar */}
@@ -286,7 +317,7 @@ export default function SupplementEstimatorPage() {
             const found = estimates.find((e) => e.id === id);
             if (found) setEstimate(found);
           }}>
-          <SelectTrigger className="w-[280px] h-9">
+          <SelectTrigger className="w-[260px] h-9">
             <SelectValue placeholder="Saved estimates" />
           </SelectTrigger>
           <SelectContent>
@@ -320,22 +351,22 @@ export default function SupplementEstimatorPage() {
               <FileTextIcon className="w-4 h-4 mr-1" /> Preview PDF
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-4xl h-[85vh] flex flex-col">
+          <DialogContent className="max-w-5xl h-[88vh] flex flex-col">
             <DialogHeader>
-              <DialogTitle>Supplement Estimate PDF</DialogTitle>
+              <DialogTitle>Supplement Estimate</DialogTitle>
               <DialogDescription>
-                {estimate.title} — RCV {money(totals.rcv)}
+                {estimate.claim.estimateName || estimate.title} — RCV {money(totals.rcv)}
               </DialogDescription>
             </DialogHeader>
             {pdfOpen && (
               <PDFViewer className="w-full flex-1 rounded-md border" showToolbar>
-                <SupplementDocument estimate={estimate} companyName="Diversity Roofing" />
+                <SupplementDocument estimate={estimate} />
               </PDFViewer>
             )}
             <DialogFooter>
               <PDFDownloadLink
-                document={<SupplementDocument estimate={estimate} companyName="Diversity Roofing" />}
-                fileName={`Supplement_${(estimate.claim.insuredName || estimate.title).replace(/\s+/g, '_')}.pdf`}>
+                document={<SupplementDocument estimate={estimate} />}
+                fileName={fileName}>
                 <Button>
                   <CloudDownloadIcon className="w-4 h-4 mr-1" /> Download PDF
                 </Button>
@@ -349,7 +380,6 @@ export default function SupplementEstimatorPage() {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        {/* LEFT 2/3: claim info, measurements, line items */}
         <div className="xl:col-span-2 flex flex-col gap-6">
           {/* Claim information */}
           <Card>
@@ -357,39 +387,81 @@ export default function SupplementEstimatorPage() {
               <CardTitle className="text-base flex items-center gap-2">
                 <HardHatIcon className="w-4 h-4" /> Claim Information
               </CardTitle>
-              <CardDescription>Header block printed at the top of the estimate.</CardDescription>
+              <CardDescription>Prints as the header block on page 1.</CardDescription>
             </CardHeader>
             <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              <TextField
-                label="Estimate Title"
+              <TxtField
+                label="Estimate Title (internal)"
                 value={estimate.title}
                 onChange={(v) => update({ title: v })}
               />
-              <TextField
-                label="Insured Name"
-                value={estimate.claim.insuredName}
-                onChange={(v) => updateClaim({ insuredName: v })}
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs text-muted-foreground">Insured Name</Label>
+                <Input
+                  className="h-8"
+                  value={estimate.claim.insuredName}
+                  onChange={(e) => {
+                    const insuredName = e.target.value;
+                    updateClaim({
+                      insuredName,
+                      estimateName: toEstimateName(insuredName)
+                    });
+                  }}
+                />
+              </div>
+              <TxtField
+                label="Estimate Name"
+                value={estimate.claim.estimateName}
+                onChange={(v) => updateClaim({ estimateName: toEstimateName(v) })}
+                placeholder="CORRINE-MULLIGAN"
               />
-              <TextField
-                label="Insurance Carrier"
-                value={estimate.claim.insuranceCarrier}
-                onChange={(v) => updateClaim({ insuranceCarrier: v })}
+              <TxtField
+                label="Home Phone"
+                value={estimate.claim.insuredHomePhone}
+                onChange={(v) => updateClaim({ insuredHomePhone: v })}
               />
-              <TextField
-                label="Claim #"
+              <TxtField
+                label="Cellular"
+                value={estimate.claim.insuredCellPhone}
+                onChange={(v) => updateClaim({ insuredCellPhone: v })}
+              />
+              <TxtField
+                label="E-mail"
+                value={estimate.claim.insuredEmail}
+                onChange={(v) => updateClaim({ insuredEmail: v })}
+              />
+              <TxtField
+                label="Property Address"
+                value={estimate.claim.propertyAddress}
+                onChange={(v) => updateClaim({ propertyAddress: v })}
+                placeholder="1923 Sterling Ln"
+              />
+              <TxtField
+                label="Property City, State ZIP"
+                value={estimate.claim.propertyCityStateZip}
+                onChange={(v) => updateClaim({ propertyCityStateZip: v })}
+                placeholder="Fernandina Beach, FL 32034"
+              />
+              <TxtField
+                label="Mailing Address (if different)"
+                value={estimate.claim.mailingAddress}
+                onChange={(v) => updateClaim({ mailingAddress: v })}
+              />
+              <TxtField
+                label="Mailing City, State ZIP"
+                value={estimate.claim.mailingCityStateZip}
+                onChange={(v) => updateClaim({ mailingCityStateZip: v })}
+              />
+              <TxtField
+                label="Claim Number"
                 value={estimate.claim.claimNumber}
                 onChange={(v) => updateClaim({ claimNumber: v })}
+                placeholder="FL26-0109563-J926"
               />
-              <TextField
-                label="Policy #"
+              <TxtField
+                label="Policy Number"
                 value={estimate.claim.policyNumber}
                 onChange={(v) => updateClaim({ policyNumber: v })}
-              />
-              <TextField
-                label="Date of Loss"
-                value={estimate.claim.dateOfLoss}
-                onChange={(v) => updateClaim({ dateOfLoss: v })}
-                placeholder="MM/DD/YYYY"
               />
               <div className="flex flex-col gap-1">
                 <Label className="text-xs text-muted-foreground">Type of Loss</Label>
@@ -400,61 +472,86 @@ export default function SupplementEstimatorPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {['Hail', 'Wind', 'Hurricane', 'Water', 'Fire', 'Fallen Tree', 'Other'].map(
-                      (t) => (
-                        <SelectItem key={t} value={t}>
-                          {t}
-                        </SelectItem>
-                      )
-                    )}
+                    {[
+                      'Wind Damage',
+                      'Hail Damage',
+                      'Hail and Wind damage',
+                      'Hurricane',
+                      'Water Damage - Non Weather Related',
+                      'Fallen Tree',
+                      'Fire',
+                      'Other'
+                    ].map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {t}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
-              <TextField
-                label="Property Address"
-                value={estimate.claim.propertyAddress}
-                onChange={(v) => updateClaim({ propertyAddress: v })}
+              <TxtField
+                label="Date of Loss"
+                value={estimate.claim.dateOfLoss}
+                onChange={(v) => updateClaim({ dateOfLoss: v })}
+                placeholder="3/16/2026"
               />
-              <TextField
-                label="City"
-                value={estimate.claim.propertyCity}
-                onChange={(v) => updateClaim({ propertyCity: v })}
+              <TxtField
+                label="Date Contacted"
+                value={estimate.claim.dateContacted}
+                onChange={(v) => updateClaim({ dateContacted: v })}
               />
-              <TextField
-                label="State"
-                value={estimate.claim.propertyState}
-                onChange={(v) => updateClaim({ propertyState: v })}
+              <TxtField
+                label="Date Received"
+                value={estimate.claim.dateReceived}
+                onChange={(v) => updateClaim({ dateReceived: v })}
               />
-              <TextField
-                label="Zip"
-                value={estimate.claim.propertyZip}
-                onChange={(v) => updateClaim({ propertyZip: v })}
+              <TxtField
+                label="Date Inspected"
+                value={estimate.claim.dateInspected}
+                onChange={(v) => updateClaim({ dateInspected: v })}
               />
-              <TextField
-                label="Adjuster Name"
-                value={estimate.claim.adjusterName}
-                onChange={(v) => updateClaim({ adjusterName: v })}
+              <TxtField
+                label="Date Entered"
+                value={estimate.claim.dateEntered}
+                onChange={(v) => updateClaim({ dateEntered: v })}
               />
-              <TextField
-                label="Adjuster Phone"
-                value={estimate.claim.adjusterPhone}
-                onChange={(v) => updateClaim({ adjusterPhone: v })}
-              />
-              <TextField
-                label="Adjuster Email"
-                value={estimate.claim.adjusterEmail}
-                onChange={(v) => updateClaim({ adjusterEmail: v })}
-              />
-              <TextField
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs text-muted-foreground">Price List</Label>
+                <Select
+                  value={estimate.claim.priceList}
+                  onValueChange={(v) => changePriceList(v as PriceListId)}>
+                  <SelectTrigger className="h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PRICE_LISTS.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.label} — {p.region}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <TxtField
                 label="Estimator"
-                value={estimate.claim.estimatorName}
-                onChange={(v) => updateClaim({ estimatorName: v })}
+                value={estimate.claim.estimator}
+                onChange={(v) => updateClaim({ estimator: v })}
               />
-              <TextField
-                label="Price List Label"
-                value={estimate.claim.priceListLabel}
-                onChange={(v) => updateClaim({ priceListLabel: v })}
-                placeholder="e.g. TXDA8X_AUG26"
+              <TxtField
+                label="Business Phone"
+                value={estimate.claim.businessPhone}
+                onChange={(v) => updateClaim({ businessPhone: v })}
+              />
+              <TxtField
+                label="Operator"
+                value={estimate.claim.operator}
+                onChange={(v) => updateClaim({ operator: v })}
+                placeholder="HAYAT"
+              />
+              <TxtField
+                label="Labor Efficiency"
+                value={estimate.claim.laborEfficiency}
+                onChange={(v) => updateClaim({ laborEfficiency: v })}
               />
             </CardContent>
           </Card>
@@ -468,12 +565,11 @@ export default function SupplementEstimatorPage() {
                     <CalculatorIcon className="w-4 h-4" /> Roof Measurements
                   </CardTitle>
                   <CardDescription>
-                    Paste a roof report (EagleView / Hover style) or enter values, then generate the
-                    full replacement scope automatically.
+                    Paste a Roofr or QuickMeasure report, then generate the replacement scope.
                   </CardDescription>
                 </div>
                 <div className="flex gap-2">
-                  <Dialog open={reportDialogOpen} onOpenChange={setReportDialogOpen}>
+                  <Dialog open={reportOpen} onOpenChange={setReportOpen}>
                     <DialogTrigger asChild>
                       <Button variant="outline" size="sm">
                         <ClipboardPasteIcon className="w-4 h-4 mr-1" /> Paste Roof Report
@@ -483,9 +579,9 @@ export default function SupplementEstimatorPage() {
                       <DialogHeader>
                         <DialogTitle>Paste Roof Report Text</DialogTitle>
                         <DialogDescription>
-                          Copy the measurement summary text out of the roof report PDF and paste it
-                          here. Totals like roof area, ridges, hips, valleys, eaves, rakes, step
-                          flashing, pitch and stories are detected automatically.
+                          Works with Roofr (&ldquo;Total eaves 188ft 7in&rdquo;) and QuickMeasure
+                          (&ldquo;Eaves 184 ft&rdquo;) style reports, including the combined
+                          &ldquo;Hips + ridges&rdquo; and &ldquo;Eaves + rakes&rdquo; figures.
                         </DialogDescription>
                       </DialogHeader>
                       <Textarea
@@ -493,7 +589,7 @@ export default function SupplementEstimatorPage() {
                         value={reportText}
                         onChange={(e) => setReportText(e.target.value)}
                         placeholder={
-                          'Example:\nTotal Roof Area = 2,847 sq ft\nRidges = 68 ft\nHips = 42 ft\nValleys = 51 ft\nEaves = 172 ft\nRakes = 96 ft\nPredominant Pitch = 6/12\nNumber of Stories = 2'
+                          'Total roof area 2802 sqft\nPredominant pitch 6/12\nTotal eaves 188ft 7in\nTotal rakes 79ft 8in\nTotal hips 98ft 0in\nTotal ridges 52ft 3in\nTotal valleys 41ft 2in\nTotal wall flashing 17ft 0in\nTotal step flashing 45ft 0in\nHips + ridges 150ft 3in\nEaves + rakes 268ft 3in'
                         }
                       />
                       <DialogFooter>
@@ -510,59 +606,65 @@ export default function SupplementEstimatorPage() {
               </div>
             </CardHeader>
             <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <NumberField
+              <NumField
                 label="Total Roof Area"
                 suffix="sq ft"
                 value={m.totalRoofAreaSqFt}
                 onChange={(v) => updateMeasurements({ totalRoofAreaSqFt: v })}
               />
-              <NumberField
-                label="Ridges"
-                suffix="LF"
-                value={m.ridgeLf}
-                onChange={(v) => updateMeasurements({ ridgeLf: v })}
-              />
-              <NumberField
-                label="Hips"
-                suffix="LF"
-                value={m.hipLf}
-                onChange={(v) => updateMeasurements({ hipLf: v })}
-              />
-              <NumberField
-                label="Valleys"
-                suffix="LF"
-                value={m.valleyLf}
-                onChange={(v) => updateMeasurements({ valleyLf: v })}
-              />
-              <NumberField
+              <NumField
                 label="Eaves"
                 suffix="LF"
                 value={m.eaveLf}
                 onChange={(v) => updateMeasurements({ eaveLf: v })}
               />
-              <NumberField
+              <NumField
                 label="Rakes"
                 suffix="LF"
                 value={m.rakeLf}
                 onChange={(v) => updateMeasurements({ rakeLf: v })}
               />
-              <NumberField
-                label="Step Flashing"
+              <NumField
+                label="Eaves + Rakes"
                 suffix="LF"
-                value={m.stepFlashingLf}
-                onChange={(v) => updateMeasurements({ stepFlashingLf: v })}
+                value={m.starterLf}
+                onChange={(v) => updateMeasurements({ starterLf: v, dripEdgeLf: v })}
               />
-              <NumberField
+              <NumField
+                label="Ridges"
+                suffix="LF"
+                value={m.ridgeLf}
+                onChange={(v) => updateMeasurements({ ridgeLf: v })}
+              />
+              <NumField
+                label="Hips"
+                suffix="LF"
+                value={m.hipLf}
+                onChange={(v) => updateMeasurements({ hipLf: v })}
+              />
+              <NumField
+                label="Hips + Ridges"
+                suffix="LF"
+                value={m.ridgeCapLf}
+                onChange={(v) => updateMeasurements({ ridgeCapLf: v })}
+              />
+              <NumField
+                label="Valleys"
+                suffix="LF"
+                value={m.valleyLf}
+                onChange={(v) => updateMeasurements({ valleyLf: v })}
+              />
+              <NumField
                 label="Wall Flashing"
                 suffix="LF"
                 value={m.wallFlashingLf}
                 onChange={(v) => updateMeasurements({ wallFlashingLf: v })}
               />
-              <NumberField
-                label="Drip Edge"
+              <NumField
+                label="Step Flashing"
                 suffix="LF"
-                value={m.dripEdgeLf}
-                onChange={(v) => updateMeasurements({ dripEdgeLf: v })}
+                value={m.stepFlashingLf}
+                onChange={(v) => updateMeasurements({ stepFlashingLf: v })}
               />
               <div className="flex flex-col gap-1">
                 <Label className="text-xs text-muted-foreground">Predominant Pitch</Label>
@@ -581,49 +683,78 @@ export default function SupplementEstimatorPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <NumberField
+              <NumField
                 label="Stories"
                 value={m.stories}
                 onChange={(v) => updateMeasurements({ stories: v })}
               />
-              <NumberField
+              <NumField
                 label="Pipe Jacks"
                 suffix="EA"
                 value={m.pipeJacks}
                 onChange={(v) => updateMeasurements({ pipeJacks: v })}
               />
-              <NumberField
-                label="Turtle Vents"
+              <NumField
+                label="Off-Ridge Vents"
                 suffix="EA"
-                value={m.turtleVents}
-                onChange={(v) => updateMeasurements({ turtleVents: v })}
+                value={m.offRidgeVents}
+                onChange={(v) => updateMeasurements({ offRidgeVents: v })}
               />
-              <NumberField
+              <NumField
+                label="Exhaust Caps"
+                suffix="EA"
+                value={m.exhaustCaps}
+                onChange={(v) => updateMeasurements({ exhaustCaps: v })}
+              />
+              <NumField
                 label="Ridge Vent"
                 suffix="LF"
                 value={m.ridgeVentLf}
                 onChange={(v) => updateMeasurements({ ridgeVentLf: v })}
               />
-              <NumberField
+              <NumField
                 label="Chimneys"
                 suffix="EA"
                 value={m.chimneys}
                 onChange={(v) => updateMeasurements({ chimneys: v })}
               />
-              <NumberField
+              <NumField
                 label="Skylights"
                 suffix="EA"
                 value={m.skylights}
                 onChange={(v) => updateMeasurements({ skylights: v })}
               />
-              <NumberField
+              <NumField
+                label="Satellite Dishes"
+                suffix="EA"
+                value={m.satelliteDishes}
+                onChange={(v) => updateMeasurements({ satelliteDishes: v })}
+              />
+              <NumField
                 label="Waste Factor"
                 suffix="%"
                 value={m.wastePct}
-                onChange={(v) => updateMeasurements({ wastePct: v ?? 10 })}
+                onChange={(v) => updateMeasurements({ wastePct: v ?? 15 })}
               />
+
+              <div className="col-span-2 md:col-span-4">
+                <Separator className="my-1" />
+              </div>
+
+              <div className="col-span-2 md:col-span-2 flex items-center justify-between gap-2">
+                <div>
+                  <Label className="text-sm">Full-deck membrane</Label>
+                  <p className="text-xs text-muted-foreground">
+                    On: water barrier over entire surface. Off: 4&quot; seam tape.
+                  </p>
+                </div>
+                <Switch checked={fullDeckMembrane} onCheckedChange={setFullDeckMembrane} />
+              </div>
+              <TxtField label="Write into Area" value={targetArea} onChange={setTargetArea} />
+              <TxtField label="Write into Room" value={targetRoom} onChange={setTargetRoom} />
+
               <div className="col-span-2 flex items-end gap-2">
-                <NumberField
+                <NumField
                   label="Roof Age (for depreciation)"
                   suffix="yrs"
                   value={roofAgeYears}
@@ -648,82 +779,103 @@ export default function SupplementEstimatorPage() {
                 <div>
                   <CardTitle className="text-base">Line Items</CardTitle>
                   <CardDescription>
-                    {estimate.lineItems.length} item{estimate.lineItems.length === 1 ? '' : 's'} —
-                    every field is editable in place.
+                    {estimate.lineItems.length} item
+                    {estimate.lineItems.length === 1 ? '' : 's'} — all fields editable in place.
                   </CardDescription>
                 </div>
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button size="sm" variant="outline">
-                      <PlusIcon className="w-4 h-4 mr-1" /> Add Line Item
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-3xl">
-                    <DialogHeader>
-                      <DialogTitle>Line Item Catalog</DialogTitle>
-                      <DialogDescription>
-                        Search by code, trade or keyword (e.g. “RFG 240”, “drip edge”, “steep”).
-                        Prices are regional defaults — adjust them on the estimate to match your
-                        price list.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="relative">
-                      <SearchIcon className="w-4 h-4 absolute left-2.5 top-2.5 text-muted-foreground" />
-                      <Input
-                        className="pl-8"
-                        placeholder="Search catalog..."
-                        value={catalogQuery}
-                        onChange={(e) => setCatalogQuery(e.target.value)}
-                      />
-                    </div>
-                    <div className="max-h-[420px] overflow-y-auto border rounded-md divide-y">
-                      {catalogResults.map((entry) => (
-                        <div
-                          key={`${entry.cat}-${entry.sel}`}
-                          className="flex items-center gap-3 p-2 hover:bg-muted/50">
-                          <Badge variant="secondary" className="font-mono shrink-0">
-                            {entry.cat} {entry.sel}
-                          </Badge>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm truncate">{entry.description}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {TRADE_NAMES[entry.cat] ?? entry.cat} — {money(entry.unitPrice)} /{' '}
-                              {entry.unit}
-                            </p>
-                          </div>
-                          <Button size="sm" variant="ghost" onClick={() => addCatalogItem(entry)}>
-                            <PlusIcon className="w-4 h-4" />
-                          </Button>
-                        </div>
+                <div className="flex items-center gap-2">
+                  <Select
+                    value={`${targetArea}||${targetRoom}`}
+                    onValueChange={(v) => {
+                      const [a, r] = v.split('||');
+                      setTargetArea(a);
+                      setTargetRoom(r);
+                    }}>
+                    <SelectTrigger className="h-9 w-[220px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {placements.map((p) => (
+                        <SelectItem key={`${p.area}||${p.room}`} value={`${p.area}||${p.room}`}>
+                          {p.area} › {p.room}
+                        </SelectItem>
                       ))}
-                      {catalogResults.length === 0 && (
-                        <p className="p-4 text-sm text-muted-foreground">No matches.</p>
-                      )}
-                    </div>
-                  </DialogContent>
-                </Dialog>
+                    </SelectContent>
+                  </Select>
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button size="sm" variant="outline">
+                        <PlusIcon className="w-4 h-4 mr-1" /> Add Line Item
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-3xl">
+                      <DialogHeader>
+                        <DialogTitle>Line Item Catalog</DialogTitle>
+                        <DialogDescription>
+                          Priced from {estimate.claim.priceList}. Items carry their standard
+                          code-citation note, which you can edit per claim. Adding to{' '}
+                          <b>
+                            {targetArea} › {targetRoom}
+                          </b>
+                          .
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="relative">
+                        <SearchIcon className="w-4 h-4 absolute left-2.5 top-2.5 text-muted-foreground" />
+                        <Input
+                          className="pl-8"
+                          placeholder="Search by description, trade or keyword..."
+                          value={catalogQuery}
+                          onChange={(e) => setCatalogQuery(e.target.value)}
+                        />
+                      </div>
+                      <div className="max-h-[420px] overflow-y-auto border rounded-md divide-y">
+                        {catalogResults.map((entry) => (
+                          <div
+                            key={entry.code}
+                            className="flex items-center gap-3 p-2 hover:bg-muted/50">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm truncate">{entry.description}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {entry.category} —{' '}
+                                {money(priceFor(entry, estimate.claim.priceList))} / {entry.unit}
+                                {entry.defaultNote ? ' — includes code citation' : ''}
+                              </p>
+                            </div>
+                            <Button size="sm" variant="ghost" onClick={() => addCatalogItem(entry)}>
+                              <PlusIcon className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        ))}
+                        {catalogResults.length === 0 && (
+                          <p className="p-4 text-sm text-muted-foreground">No matches.</p>
+                        )}
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="p-0">
               {estimate.lineItems.length === 0 ? (
                 <p className="text-sm text-muted-foreground px-6 pb-6">
-                  No line items yet. Paste a roof report and hit <b>Generate Scope</b>, or add items
-                  from the catalog.
+                  No line items yet. Paste a roof report and hit <b>Generate Scope</b>, or add
+                  items from the catalog.
                 </p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b text-xs text-muted-foreground [&>th]:px-2 [&>th]:py-2 [&>th]:text-left">
-                        <th className="w-[110px]">Code</th>
-                        <th className="min-w-[220px]">Description</th>
+                        <th className="min-w-[240px]">Description</th>
                         <th className="w-[90px]">Qty</th>
-                        <th className="w-[60px]">Unit</th>
-                        <th className="w-[100px]">Unit Price</th>
-                        <th className="w-[80px]">Dep %</th>
-                        <th className="w-[100px] text-right!">RCV</th>
-                        <th className="w-[100px] text-right!">ACV</th>
-                        <th className="w-[40px]"></th>
+                        <th className="w-[56px]">Unit</th>
+                        <th className="w-[96px]">Unit Price</th>
+                        <th className="w-[76px]">Dep %</th>
+                        <th className="w-[90px]">O&amp;P</th>
+                        <th className="w-[100px]">RCV</th>
+                        <th className="w-[100px]">ACV</th>
+                        <th className="w-[40px]" />
                       </tr>
                     </thead>
                     <tbody>
@@ -732,11 +884,18 @@ export default function SupplementEstimatorPage() {
                         return (
                           <tr key={li.id} className="border-b align-top hover:bg-muted/30">
                             <td className="px-2 py-2">
-                              <Badge variant="outline" className="font-mono">
-                                {li.cat} {li.sel}
-                              </Badge>
-                            </td>
-                            <td className="px-2 py-2">
+                              <div className="flex items-center gap-1 mb-1">
+                                <Badge variant="secondary" className="text-[10px]">
+                                  {li.laborMinimum
+                                    ? LABOR_MINIMUM_SECTION
+                                    : `${li.area} › ${li.room}`}
+                                </Badge>
+                                {li.group ? (
+                                  <Badge variant="outline" className="text-[10px]">
+                                    {li.group}
+                                  </Badge>
+                                ) : null}
+                              </div>
                               <Input
                                 className="h-8"
                                 value={li.description}
@@ -744,9 +903,10 @@ export default function SupplementEstimatorPage() {
                                   updateLineItem(li.id, { description: e.target.value })
                                 }
                               />
-                              <Input
-                                className="h-7 mt-1 text-xs"
-                                placeholder="Justification note (prints under the line)"
+                              <Textarea
+                                rows={2}
+                                className="mt-1 text-xs"
+                                placeholder="Justification / code citation (prints under the line)"
                                 value={li.note ?? ''}
                                 onChange={(e) => updateLineItem(li.id, { note: e.target.value })}
                               />
@@ -758,11 +918,13 @@ export default function SupplementEstimatorPage() {
                                 step="any"
                                 value={li.quantity}
                                 onChange={(e) =>
-                                  updateLineItem(li.id, { quantity: Number(e.target.value) || 0 })
+                                  updateLineItem(li.id, {
+                                    quantity: Number(e.target.value) || 0
+                                  })
                                 }
                               />
                             </td>
-                            <td className="px-2 py-2 pt-3 text-xs text-muted-foreground">
+                            <td className="px-2 py-2 pt-4 text-xs text-muted-foreground">
                               {li.unit}
                             </td>
                             <td className="px-2 py-2">
@@ -772,7 +934,9 @@ export default function SupplementEstimatorPage() {
                                 step="0.01"
                                 value={li.unitPrice}
                                 onChange={(e) =>
-                                  updateLineItem(li.id, { unitPrice: Number(e.target.value) || 0 })
+                                  updateLineItem(li.id, {
+                                    unitPrice: Number(e.target.value) || 0
+                                  })
                                 }
                               />
                             </td>
@@ -790,10 +954,13 @@ export default function SupplementEstimatorPage() {
                                 }
                               />
                             </td>
-                            <td className="px-2 py-2 pt-3 text-right font-medium whitespace-nowrap">
+                            <td className="px-2 py-2 pt-4 text-right text-xs whitespace-nowrap">
+                              {money(t.oAndP)}
+                            </td>
+                            <td className="px-2 py-2 pt-4 text-right font-medium whitespace-nowrap">
                               {money(t.rcv)}
                             </td>
-                            <td className="px-2 py-2 pt-3 text-right whitespace-nowrap">
+                            <td className="px-2 py-2 pt-4 text-right whitespace-nowrap">
                               {money(t.acv)}
                             </td>
                             <td className="px-2 py-2">
@@ -815,34 +982,34 @@ export default function SupplementEstimatorPage() {
           </Card>
         </div>
 
-        {/* RIGHT 1/3: settings + totals */}
+        {/* Right column */}
         <div className="flex flex-col gap-6">
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Estimate Settings</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
-              <NumberField
+              <NumField
                 label="Material Sales Tax"
                 suffix="%"
                 value={estimate.settings.salesTaxPct}
                 onChange={(v) => updateSettings({ salesTaxPct: v ?? 0 })}
               />
               <div className="flex items-center justify-between">
-                <Label className="text-sm">Apply Overhead & Profit</Label>
+                <Label className="text-sm">Apply Overhead &amp; Profit</Label>
                 <Switch
                   checked={estimate.settings.applyOAndP}
                   onCheckedChange={(v) => updateSettings({ applyOAndP: v })}
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <NumberField
+                <NumField
                   label="Overhead"
                   suffix="%"
                   value={estimate.settings.overheadPct}
                   onChange={(v) => updateSettings({ overheadPct: v ?? 0 })}
                 />
-                <NumberField
+                <NumField
                   label="Profit"
                   suffix="%"
                   value={estimate.settings.profitPct}
@@ -856,37 +1023,41 @@ export default function SupplementEstimatorPage() {
                   onCheckedChange={(v) => updateSettings({ recoverableDepreciation: v })}
                 />
               </div>
-              <NumberField
+              <NumField
                 label="Deductible"
                 suffix="$"
                 value={estimate.settings.deductible}
                 onChange={(v) => updateSettings({ deductible: v ?? 0 })}
+              />
+              <TxtField
+                label="Cover note (optional)"
+                value={estimate.settings.coverPageNote ?? ''}
+                onChange={(v) => updateSettings({ coverPageNote: v })}
+                placeholder="Final Draft with/without Removal Depreciation"
               />
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">Estimate Summary</CardTitle>
+              <CardTitle className="text-base">Summary for Dwelling</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-1.5 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Line Item Total</span>
-                <span>{money(totals.lineItemSubtotal)}</span>
+                <span>{money(totals.lineItemTotal)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">
-                  Material Sales Tax ({estimate.settings.salesTaxPct}%)
-                </span>
+                <span className="text-muted-foreground">Material Sales Tax</span>
                 <span>{money(totals.salesTax)}</span>
-              </div>
-              <Separator className="my-1" />
-              <div className="flex justify-between font-medium">
-                <span>Subtotal</span>
-                <span>{money(totals.subtotalWithTax)}</span>
               </div>
               {estimate.settings.applyOAndP && (
                 <>
+                  <Separator className="my-1" />
+                  <div className="flex justify-between font-medium">
+                    <span>Subtotal</span>
+                    <span>{money(totals.subtotal)}</span>
+                  </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">
                       Overhead ({estimate.settings.overheadPct}%)
@@ -903,56 +1074,58 @@ export default function SupplementEstimatorPage() {
               )}
               <Separator className="my-1" />
               <div className="flex justify-between font-semibold text-base">
-                <span>RCV</span>
+                <span>Replacement Cost Value</span>
                 <span>{money(totals.rcv)}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">
-                  Depreciation{estimate.settings.recoverableDepreciation ? ' (recoverable)' : ''}
-                </span>
-                <span className="text-red-500">({money(totals.totalDepreciation)})</span>
-              </div>
-              <div className="flex justify-between font-semibold text-base">
-                <span>ACV</span>
-                <span>{money(totals.acv)}</span>
-              </div>
-              {estimate.settings.deductible > 0 && (
+              {totals.totalDepreciation > 0 && (
                 <>
-                  <Separator className="my-1" />
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Deductible</span>
-                    <span className="text-red-500">({money(estimate.settings.deductible)})</span>
+                    <span className="text-muted-foreground">
+                      Less Depreciation
+                      {estimate.settings.recoverableDepreciation ? ' (recoverable)' : ''}
+                    </span>
+                    <span className="text-red-500">({money(totals.totalDepreciation)})</span>
                   </div>
-                  <div className="flex justify-between font-medium">
-                    <span>Net Claim (ACV)</span>
-                    <span>{money(totals.netClaimAcv)}</span>
+                  <div className="flex justify-between font-semibold">
+                    <span>Actual Cash Value</span>
+                    <span>{money(totals.acv)}</span>
                   </div>
-                  {estimate.settings.recoverableDepreciation && (
-                    <div className="flex justify-between font-medium">
-                      <span>Net w/ Recovered Dep.</span>
-                      <span>{money(totals.netClaimIfRecoverable)}</span>
-                    </div>
-                  )}
                 </>
+              )}
+              {estimate.settings.deductible > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Less Deductible</span>
+                  <span className="text-red-500">({money(estimate.settings.deductible)})</span>
+                </div>
+              )}
+              <Separator className="my-1" />
+              <div className="flex justify-between font-semibold text-base">
+                <span>Net Claim</span>
+                <span>{money(totals.netClaim)}</span>
+              </div>
+              {totals.totalDepreciation > 0 && estimate.settings.recoverableDepreciation && (
+                <div className="flex justify-between font-medium">
+                  <span>Net if Dep. Recovered</span>
+                  <span>{money(totals.netClaimIfRecovered)}</span>
+                </div>
               )}
             </CardContent>
           </Card>
 
-          {totals.tradeRecap.length > 0 && (
+          {totals.categoryRecap.length > 0 && (
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-base">Recap by Trade</CardTitle>
+                <CardTitle className="text-base">Recap by Category</CardTitle>
               </CardHeader>
               <CardContent className="flex flex-col gap-1.5 text-sm">
-                {totals.tradeRecap.map((r) => (
-                  <div key={r.cat} className="flex justify-between">
-                    <span className="text-muted-foreground">
-                      <span className="font-mono text-xs mr-1">{r.cat}</span>
-                      {r.trade}
-                    </span>
-                    <span>
-                      {money(r.rcv)}{' '}
-                      <span className="text-xs text-muted-foreground">({r.pctOfTotal.toFixed(1)}%)</span>
+                {totals.categoryRecap.map((r) => (
+                  <div key={r.category} className="flex justify-between gap-2">
+                    <span className="text-muted-foreground text-xs">{r.category}</span>
+                    <span className="whitespace-nowrap">
+                      {money(r.total)}{' '}
+                      <span className="text-xs text-muted-foreground">
+                        ({r.pctOfTotal.toFixed(2)}%)
+                      </span>
                     </span>
                   </div>
                 ))}
@@ -961,9 +1134,8 @@ export default function SupplementEstimatorPage() {
           )}
 
           <p className="text-xs text-muted-foreground px-1">
-            Unit prices are editable regional defaults, not a live price list. Verify pricing
-            against the current published price list for your market before submitting to a
-            carrier.
+            Unit prices default to the selected price list and stay editable per line. Verify
+            against the current published list before submitting to a carrier.
           </p>
         </div>
       </div>

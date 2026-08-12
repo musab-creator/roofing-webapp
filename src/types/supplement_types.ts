@@ -1,101 +1,190 @@
 // ---------------------------------------------------------
-// Types for the Xactimate-style Supplement Estimate Creator
+// Types for the Diversity Roofing supplement estimate creator.
+//
+// The data model mirrors the structure of the estimates the
+// company actually issues: an Area > Room > group hierarchy of
+// line items, per-line O&P, and a summary that resolves to
+// RCV / depreciation / ACV / net claim.
 // ---------------------------------------------------------
 
-export type EstimateUnit = 'SQ' | 'LF' | 'SF' | 'EA' | 'HR' | 'DA' | 'RM' | 'WK' | 'MO' | 'CF' | 'SY';
+export type EstimateUnit =
+  | 'SQ'
+  | 'LF'
+  | 'SF'
+  | 'EA'
+  | 'HR'
+  | 'DA'
+  | 'WK'
+  | 'MO'
+  | 'SY'
+  | 'CF'
+  | 'RM';
+
+/** Recap-by-category buckets, spelled as they print on the estimate. */
+export type CategoryCode =
+  | 'ROOFING'
+  | 'GENERAL DEMOLITION'
+  | 'PAINTING'
+  | 'DRYWALL'
+  | 'INSULATION'
+  | 'CLEANING'
+  | 'CONTENT MANIPULATION'
+  | 'WINDOWS - SKYLIGHTS'
+  | 'SIDING'
+  | 'SOFFIT, FASCIA & GUTTER'
+  | 'FRAMING & ROUGH CARPENTRY'
+  | 'HEAT, VENT & AIR CONDITIONING'
+  | 'ELECTRICAL'
+  | 'TEMPORARY REPAIRS'
+  | 'WATER EXTRACTION & REMEDIATION';
+
+/** Published price lists the company estimates against. */
+export type PriceListId = 'FLJA8X_JUN26' | 'GABR8X_FEB26';
+
+export interface PriceListInfo {
+  id: PriceListId;
+  label: string;
+  region: string;
+  defaultSalesTaxPct: number;
+}
 
 export interface CatalogItem {
-  /** Category code, e.g. RFG, DRY, PNT */
-  cat: string;
-  /** Selector code within the category, e.g. 240, 300E */
-  sel: string;
-  /** Full trade-language description */
+  /** Stable internal key (not printed). */
+  code: string;
+  category: CategoryCode;
+  /** Exact wording as it appears on the estimate. */
   description: string;
   unit: EstimateUnit;
-  /** Regional default — always editable on the estimate */
-  unitPrice: number;
-  /** Typical useful life in years, used for age-based depreciation */
+  /** Unit price per price list. */
+  prices: Partial<Record<PriceListId, number>>;
+  /**
+   * Share of the line total that is taxable material (0-1).
+   * Derived from the tax actually charged on issued estimates.
+   */
+  materialRatio: number;
+  /**
+   * For R&R (remove & replace) items, the share of the line total
+   * attributed to GENERAL DEMOLITION in the recap by category.
+   */
+  demoRatio?: number;
+  /** Whether this item is a demolition/removal line in its entirety. */
+  allDemo?: boolean;
+  /** Default justification paragraph printed under the line. */
+  defaultNote?: string;
+  /** Sub-heading the item files under inside a room, e.g. "Flashing/Vents". */
+  group?: string;
+  /** Labor minimums print in their own trailing section. */
+  laborMinimum?: boolean;
+  /** Typical useful life in years, for age-based depreciation. */
   lifeYears?: number;
-  /** Portion of the price that is material (0-1), used for sales tax */
-  materialRatio?: number;
-  /** Items like labor minimums / detach & reset that never depreciate */
+  /** Items that never depreciate (labor, demolition, D&R). */
   nonDepreciable?: boolean;
-  /** Search keywords */
   tags?: string[];
 }
 
-export type LineItemActivity = 'replace' | 'remove' | 'detach_reset' | 'repair' | 'install';
-
 export interface SupplementLineItem {
   id: string;
-  cat: string;
-  sel: string;
-  activity: LineItemActivity;
+  /** Catalog code this line came from, when applicable. */
+  code?: string;
+  category: CategoryCode;
   description: string;
   quantity: number;
   unit: EstimateUnit;
   unitPrice: number;
-  /** Percentage 0-100 applied to this line's RCV */
+  materialRatio: number;
+  demoRatio: number;
+  allDemo: boolean;
+  /** Percentage 0-100 of this line's RCV held as depreciation. */
   depreciationPct: number;
   nonDepreciable: boolean;
-  materialRatio: number;
-  /** Free-form justification shown on the PDF under the line */
+  /** Justification text printed beneath the line. */
   note?: string;
-  /** Grouping header on the printout, e.g. "Roof", "Dwelling Roof" */
-  groupName: string;
+  /** Area the line belongs to, e.g. "Exterior", "Level 1". */
+  area: string;
+  /** Room within the area, e.g. "Dwelling Roof", "Bathroom". */
+  room: string;
+  /** Optional sub-heading within the room, e.g. "Roofing". */
+  group?: string;
+  /** Bid items print with no pricing and a REVISED marker. */
+  bidItem?: boolean;
+  /** Labor minimums are collected into their own section. */
+  laborMinimum?: boolean;
 }
 
+/**
+ * Roof measurements, covering the fields reported by both
+ * Roofr and QuickMeasure style reports.
+ */
 export interface RoofMeasurements {
   totalRoofAreaSqFt?: number;
+  pitchedAreaSqFt?: number;
+  flatAreaSqFt?: number;
+  facets?: number;
+  predominantPitch?: string;
+  stories?: number;
+  eaveLf?: number;
+  rakeLf?: number;
   ridgeLf?: number;
   hipLf?: number;
   valleyLf?: number;
-  eaveLf?: number;
-  rakeLf?: number;
-  stepFlashingLf?: number;
   wallFlashingLf?: number;
+  stepFlashingLf?: number;
+  transitionsLf?: number;
   dripEdgeLf?: number;
-  predominantPitch?: string;
-  stories?: number;
-  facets?: number;
-  penetrations?: number;
+  starterLf?: number;
+  ridgeCapLf?: number;
+  /** Counted from the inspection, not the report. */
   pipeJacks?: number;
   turtleVents?: number;
+  offRidgeVents?: number;
+  exhaustCaps?: number;
   ridgeVentLf?: number;
   chimneys?: number;
   skylights?: number;
+  satelliteDishes?: number;
+  /** Waste percentage applied to the shingle line. */
   wastePct: number;
+  /** Report source label printed as the area name on the estimate. */
+  reportSource?: string;
 }
 
 export interface ClaimInfo {
   insuredName: string;
+  insuredHomePhone: string;
+  insuredCellPhone: string;
+  insuredEmail: string;
+  /** The insured's mailing address, which may differ from the loss location. */
+  mailingAddress: string;
+  mailingCityStateZip: string;
   propertyAddress: string;
-  propertyCity: string;
-  propertyState: string;
-  propertyZip: string;
-  insuranceCarrier: string;
+  propertyCityStateZip: string;
   claimNumber: string;
   policyNumber: string;
-  dateOfLoss: string;
   typeOfLoss: string;
-  adjusterName: string;
-  adjusterPhone: string;
-  adjusterEmail: string;
-  estimatorName: string;
-  priceListLabel: string;
+  dateOfLoss: string;
+  dateContacted: string;
+  dateReceived: string;
+  dateInspected: string;
+  dateEntered: string;
+  priceList: PriceListId;
+  laborEfficiency: string;
+  estimator: string;
+  businessPhone: string;
+  /** Operator who wrote the estimate, e.g. HAYAT. */
+  operator: string;
+  /** Estimate name slug, e.g. CORRINE-MULLIGAN. */
+  estimateName: string;
 }
 
 export interface EstimateSettings {
-  /** Sales tax percent applied to the material portion of each line */
   salesTaxPct: number;
-  /** Overhead percent (e.g. 10) */
   overheadPct: number;
-  /** Profit percent (e.g. 10) */
   profitPct: number;
   applyOAndP: boolean;
-  /** Whether depreciation is recoverable (shown as such on the summary) */
   recoverableDepreciation: boolean;
   deductible: number;
+  /** Optional note printed above the summary, e.g. draft status. */
+  coverPageNote?: string;
 }
 
 export interface SupplementEstimate {
@@ -110,24 +199,55 @@ export interface SupplementEstimate {
 }
 
 export interface LineItemTotals {
-  itemTotal: number; // qty * unitPrice
+  /** quantity x unitPrice */
+  itemTotal: number;
   tax: number;
-  rcv: number; // itemTotal + tax
+  oAndP: number;
+  rcv: number;
   depreciation: number;
   acv: number;
 }
 
+export interface GroupTotals {
+  name: string;
+  tax: number;
+  oAndP: number;
+  rcv: number;
+  depreciation: number;
+  acv: number;
+  /** Pre-tax, pre-O&P total, which is what the recap by room reports. */
+  itemTotal: number;
+}
+
+export interface CategoryRecapRow {
+  category: string;
+  total: number;
+  pctOfTotal: number;
+}
+
+export interface RoomRecapRow {
+  area: string;
+  room: string;
+  itemTotal: number;
+  pctOfTotal: number;
+}
+
 export interface EstimateTotals {
-  lineItemSubtotal: number;
+  lineItemTotal: number;
   salesTax: number;
-  subtotalWithTax: number;
+  subtotal: number;
   overhead: number;
   profit: number;
   rcv: number;
   totalDepreciation: number;
   acv: number;
   deductible: number;
-  netClaimIfRecoverable: number; // RCV - deductible
-  netClaimAcv: number; // ACV - deductible
-  tradeRecap: Array<{ trade: string; cat: string; rcv: number; pctOfTotal: number }>;
+  netClaim: number;
+  /** Net claim once recoverable depreciation is released. */
+  netClaimIfRecovered: number;
+  categoryRecap: CategoryRecapRow[];
+  roomRecap: RoomRecapRow[];
+  /** Room-level totals keyed "area||room". */
+  roomTotals: Map<string, GroupTotals>;
+  areaTotals: Map<string, GroupTotals>;
 }
