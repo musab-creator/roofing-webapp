@@ -38,6 +38,20 @@ import { Layout, ProtectedRoute } from './components';
 import { AuthProvider } from './hooks/useAuth';
 import InvoiceInfoPage from './pages/invoice-info';
 import QuoteInfoPage from './pages/quote-info';
+import {
+  CrmDashboardPage,
+  LeadsPage,
+  LeadInfoPage,
+  ClaimsPage,
+  ClaimInfoPage,
+  SupplementInfoPage,
+  RequestsPage,
+  CommissionsPage,
+  CallCenterPage,
+  CarriersPage,
+  TerritoriesPage,
+  RepsPage
+} from './pages/crm';
 
 const container = document.getElementById('app');
 if (!container) throw new Error('Failed to find the root element');
@@ -171,6 +185,102 @@ root.render(
                 element={
                   <ProtectedRoute>
                     <SettingsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/crm"
+                element={
+                  <ProtectedRoute>
+                    <CrmDashboardPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/crm/leads"
+                element={
+                  <ProtectedRoute>
+                    <LeadsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/crm/leads/:id"
+                element={
+                  <ProtectedRoute>
+                    <LeadInfoPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/crm/claims"
+                element={
+                  <ProtectedRoute>
+                    <ClaimsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/crm/claims/:id"
+                element={
+                  <ProtectedRoute>
+                    <ClaimInfoPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/crm/supplements/:id"
+                element={
+                  <ProtectedRoute>
+                    <SupplementInfoPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/crm/requests"
+                element={
+                  <ProtectedRoute>
+                    <RequestsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/crm/commissions"
+                element={
+                  <ProtectedRoute>
+                    <CommissionsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/crm/call-center"
+                element={
+                  <ProtectedRoute>
+                    <CallCenterPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/crm/carriers"
+                element={
+                  <ProtectedRoute>
+                    <CarriersPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/crm/territories"
+                element={
+                  <ProtectedRoute>
+                    <TerritoriesPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/crm/reps"
+                element={
+                  <ProtectedRoute>
+                    <RepsPage />
                   </ProtectedRoute>
                 }
               />
